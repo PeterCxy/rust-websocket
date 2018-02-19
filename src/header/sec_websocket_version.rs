@@ -1,7 +1,7 @@
-use hyper::header::{Header, HeaderFormat};
-use hyper::header::parsing::from_one_raw_str;
-use hyper;
-use std::fmt::{self, Debug};
+use std::fmt;
+use std::str::{self, FromStr};
+
+use http::header::HeaderValue;
 
 /// Represents a Sec-WebSocket-Version header
 #[derive(PartialEq, Clone)]
@@ -21,28 +21,30 @@ impl fmt::Debug for WebSocketVersion {
 	}
 }
 
-impl Header for WebSocketVersion {
-	fn header_name() -> &'static str {
-		"Sec-WebSocket-Version"
-	}
+impl FromStr for WebSocketVersion {
+	type Err = ();
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		let value = try!(str::from_utf8(value.as_bytes()).map_err(|_| ())).trim();
 
-	fn parse_header(raw: &[Vec<u8>]) -> hyper::Result<WebSocketVersion> {
-		from_one_raw_str(raw).map(|s: String| match &s[..] {
-		                              "13" => WebSocketVersion::WebSocket13,
-		                              _ => WebSocketVersion::Unknown(s),
-		                          })
+		match &value[..] {
+			"13" => Ok(WebSocketVersion::WebSocket13),
+			_ => Ok(WebSocketVersion::Unknown(value.to_owned())),
+		}
 	}
 }
 
-impl HeaderFormat for WebSocketVersion {
-	fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		self.fmt(fmt)
+impl From<WebSocketVersion> for HeaderValue {
+	fn from(version: WebSocketVersion) -> HeaderValue {
+		match &version {
+			&WebSocketVersion::WebSocket13 => HeaderValue::from_str("13").unwrap(),
+			&WebSocketVersion::Unknown(ref version) => HeaderValue::from_str(&version.to_owned()).unwrap(),
+		}
 	}
 }
 
 impl fmt::Display for WebSocketVersion {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		self.fmt_header(fmt)
+		fmt::Debug::fmt(self, fmt)
 	}
 }
 

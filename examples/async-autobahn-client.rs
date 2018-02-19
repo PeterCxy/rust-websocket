@@ -10,6 +10,8 @@ use futures::stream::Stream;
 use futures::Future;
 use futures::future::{self, Loop};
 
+type BoxFuture<I, E> = Box<Future<Item = I, Error = E>>;
+
 fn main() {
 	let addr = "ws://127.0.0.1:9001".to_string();
 	let agent = "rust-websocket";
@@ -33,36 +35,50 @@ fn main() {
 				println!("Executing test case: {}/{}", case_id, case_count);
 				future::loop_fn(duplex, |stream| {
 					stream.into_future()
-					      .or_else(|(err, stream)| {
-						               println!("Could not receive message: {:?}", err);
-						               stream.send(OwnedMessage::Close(None)).map(|s| (None, s))
-						              })
-					      .and_then(|(msg, stream)| match msg {
-					                    Some(OwnedMessage::Text(txt)) => {
-						                    stream.send(OwnedMessage::Text(txt))
-					                              .map(|s| Loop::Continue(s))
-					                              .boxed()
-					                    }
-					                    Some(OwnedMessage::Binary(bin)) => {
-						                    stream.send(OwnedMessage::Binary(bin))
-					                              .map(|s| Loop::Continue(s))
-					                              .boxed()
-					                    }
-					                    Some(OwnedMessage::Ping(data)) => {
-						                    stream.send(OwnedMessage::Pong(data))
-					                              .map(|s| Loop::Continue(s))
-					                              .boxed()
-					                    }
-					                    Some(OwnedMessage::Close(_)) => {
-						                    stream.send(OwnedMessage::Close(None))
-					                              .map(|_| Loop::Break(()))
-					                              .boxed()
-					                    }
-					                    Some(OwnedMessage::Pong(_)) => {
-						                    future::ok(Loop::Continue(stream)).boxed()
-					                    }
-					                    None => future::ok(Loop::Break(())).boxed(),
-					                })
+						.or_else(|(err, stream)| {
+							println!("Could not receive message: {:?}", err);
+							stream.send(OwnedMessage::Close(None)).map(|s| (None, s))
+						})
+						.and_then(|(msg, stream)| {
+							match msg {
+								Some(OwnedMessage::Text(txt)) => {
+									Box::new(
+										stream.send(OwnedMessage::Text(txt))
+											.map(|s| Loop::Continue(s))
+									)
+										as BoxFuture<_, _>
+								}
+								Some(OwnedMessage::Binary(bin)) => {
+									Box::new(
+										stream.send(OwnedMessage::Binary(bin))
+											.map(|s| Loop::Continue(s))
+									)
+										as BoxFuture<_, _>
+								}
+								Some(OwnedMessage::Ping(data)) => {
+									Box::new(
+										stream.send(OwnedMessage::Pong(data))
+											.map(|s| Loop::Continue(s))
+									)
+										as BoxFuture<_, _>
+								}
+								Some(OwnedMessage::Pong(_)) => {
+									Box::new(future::ok(Loop::Continue(stream)))
+										as BoxFuture<_, _>
+								},
+								Some(OwnedMessage::Close(_)) => {
+									Box::new(
+										stream.send(OwnedMessage::Close(None))
+											.map(|_| Loop::Break(()))
+									)
+										as BoxFuture<_, _>
+								}
+								None => {
+									Box::new(future::ok(Loop::Break(())))
+										as BoxFuture<_, _>
+								}
+							}
+						})
 				})
 			})
 			.map(move |_| {

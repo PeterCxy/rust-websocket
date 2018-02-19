@@ -48,7 +48,7 @@ pub use tokio_core::reactor::Handle;
 pub use tokio_io::codec::Framed;
 pub use tokio_core::net::TcpStream;
 pub use futures::Future;
-use hyper::header::Headers;
+use http::header::HeaderMap;
 
 use result::WebSocketError;
 use codec::ws::MessageCodec;
@@ -72,4 +72,4 @@ pub type Client<S> = Framed<S, MessageCodec<OwnedMessage>>;
 /// headers to see if the server accepted the protocol or other custom header.
 /// This crate will not automatically close the connection if the server refused
 /// to use the user protocols given to it, you must check that the server accepted.
-pub type ClientNew<S> = Box<Future<Item = (Client<S>, Headers), Error = WebSocketError>>;
+pub type ClientNew<S> = Box<Future<Item = (Client<S>, HeaderMap), Error = WebSocketError>>;

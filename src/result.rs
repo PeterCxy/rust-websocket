@@ -5,7 +5,7 @@ use std::str::Utf8Error;
 use std::error::Error;
 use std::convert::From;
 use std::fmt;
-use hyper::Error as HttpError;
+use httparse::Error as HttpError;
 use url::ParseError;
 use server::upgrade::HyperIntoWsError;
 

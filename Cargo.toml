@@ -17,8 +17,9 @@ categories = ["asynchronous", "network-programming", "web-programming", "web-pro
 license = "MIT"
 
 [dependencies]
-hyper = "^0.10.6"
-unicase = "1.0"
+buf_redux = "^0.6.3"
+httparse = "1.0"
+unicase = "2.0"
 url = "1.0"
 bitflags = "0.9"
 rand = "0.3"
@@ -31,6 +32,14 @@ tokio-io = { version = "^0.1.2", optional = true }
 tokio-tls = { version = "0.1", optional = true }
 bytes = { version = "0.4", optional = true }
 native-tls = { version = "^0.1.2", optional = true }
+
+[dependencies.http]
+git = "https://github.com/hyperium/http"
+branch = "master"
+
+[dependencies.hyper]
+path = "../hyper"
+features = ["raw_status"]
 
 [dev-dependencies]
 futures-cpupool = "0.1"

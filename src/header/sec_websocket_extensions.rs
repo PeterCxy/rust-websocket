@@ -1,8 +1,6 @@
 //! Provides the Sec-WebSocket-Extensions header.
 
-use hyper::header::{Header, HeaderFormat};
-use hyper::header::parsing::{from_comma_delimited, fmt_comma_delimited};
-use hyper;
+//use hyper::header::parsing::{from_comma_delimited,};
 use std::fmt;
 use std::str::FromStr;
 use std::ops::Deref;
@@ -35,9 +33,9 @@ pub struct Extension {
 
 impl Extension {
 	/// Creates a new extension with the given name
-	pub fn new(name: String) -> Extension {
+	pub fn new(name: &str) -> Extension {
 		Extension {
-			name: name,
+			name: name.to_owned(),
 			params: Vec::new(),
 		}
 	}
@@ -105,26 +103,23 @@ impl fmt::Display for Parameter {
 	}
 }
 
-impl Header for WebSocketExtensions {
-	fn header_name() -> &'static str {
-		"Sec-WebSocket-Extensions"
-	}
+// impl Header for WebSocketExtensions {
+// 	fn header_name() -> &'static str {
+// 		"Sec-WebSocket-Extensions"
+// 	}
 
-	fn parse_header(raw: &[Vec<u8>]) -> hyper::Result<WebSocketExtensions> {
-		from_comma_delimited(raw).map(WebSocketExtensions)
-	}
-}
+// 	fn parse_header(raw: &hyper::header::Raw) -> hyper::Result<WebSocketExtensions> {
+// 		from_comma_delimited(raw).map(WebSocketExtensions)
+// 	}
 
-impl HeaderFormat for WebSocketExtensions {
-	fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		let WebSocketExtensions(ref value) = *self;
-		fmt_comma_delimited(fmt, &value[..])
-	}
-}
+// 	fn fmt_header(&self, fmt: &mut hyper::header::Formatter) -> fmt::Result {
+// 		fmt.fmt_line(self)
+// 	}
+// }
 
 impl fmt::Display for WebSocketExtensions {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		self.fmt_header(fmt)
+		fmt::Display::fmt(self, fmt)
 	}
 }
 

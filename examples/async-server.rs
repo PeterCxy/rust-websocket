@@ -27,7 +27,7 @@ fn main() {
         .for_each(|(upgrade, addr)| {
             println!("Got a connection from: {}", addr);
             // check if it has the protocol we want
-            if !upgrade.protocols().iter().any(|s| s == "rust-websocket") {
+            if !upgrade.protocols().iter().any(|s| *s == "rust-websocket") {
                 // reject it if it doesn't
                 spawn_future(upgrade.reject(), "Upgrade Rejection", &handle);
                 return Ok(());
@@ -35,7 +35,7 @@ fn main() {
 
             // accept the request to be a ws connection if it does
             let f = upgrade
-                .use_protocol("rust-websocket")
+                .use_protocols(vec!["rust-websocket"])
                 .accept()
                 // send a greeting!
                 .and_then(|(s, _)| s.send(Message::text("Hello World!").into()))

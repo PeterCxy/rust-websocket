@@ -1,8 +1,9 @@
-use hyper::header::{Header, HeaderFormat};
-use hyper::header::parsing::{from_comma_delimited, fmt_comma_delimited};
-use hyper;
+//use hyper::header::parsing::{from_comma_delimited, fmt_comma_delimited};
 use std::fmt;
 use std::ops::Deref;
+use std::str::FromStr;
+
+use http::header::HeaderValue;
 
 // TODO: only allow valid protocol names to be added
 
@@ -17,26 +18,24 @@ impl Deref for WebSocketProtocol {
 	}
 }
 
-impl Header for WebSocketProtocol {
-	fn header_name() -> &'static str {
-		"Sec-WebSocket-Protocol"
-	}
-
-	fn parse_header(raw: &[Vec<u8>]) -> hyper::Result<WebSocketProtocol> {
-		from_comma_delimited(raw).map(WebSocketProtocol)
+impl FromStr for WebSocketProtocol {
+	type Err = ();
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(WebSocketProtocol(s.split(',')
+			.map(|s| s.to_owned())
+			.collect()))
 	}
 }
 
-impl HeaderFormat for WebSocketProtocol {
-	fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		let WebSocketProtocol(ref value) = *self;
-		fmt_comma_delimited(fmt, &value[..])
+impl From<WebSocketProtocol> for HeaderValue {
+	fn from(protocol: WebSocketProtocol) -> Self {
+		HeaderValue::from_str(&format!("{}", protocol)).unwrap()
 	}
 }
 
 impl fmt::Display for WebSocketProtocol {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		self.fmt_header(fmt)
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		Ok(())
 	}
 }
 

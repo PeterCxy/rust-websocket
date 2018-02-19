@@ -1,5 +1,7 @@
 /target
 /Cargo.lock
+*.swo
+*.swp
 
 # emacs
 *.#*.rs

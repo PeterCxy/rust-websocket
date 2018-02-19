@@ -1,7 +1,6 @@
 use base64;
-use hyper::header::{Header, HeaderFormat};
-use hyper::header::parsing::from_one_raw_str;
-use hyper;
+//use hyper::header::parsing::from_one_raw_str;
+use http::header::HeaderValue;
 use std::fmt::{self, Debug};
 use std::str::FromStr;
 use header::WebSocketKey;
@@ -16,7 +15,7 @@ pub struct WebSocketAccept([u8; 20]);
 
 impl Debug for WebSocketAccept {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "WebSocketAccept({})", self.serialize())
+		write!(f, "WebSocketAccept({})", self)
 	}
 }
 
@@ -43,8 +42,9 @@ impl FromStr for WebSocketAccept {
 
 impl WebSocketAccept {
 	/// Create a new WebSocketAccept from the given WebSocketKey
-	pub fn new(key: &WebSocketKey) -> WebSocketAccept {
-		let serialized = key.serialize();
+	pub fn new<K: Into<WebSocketKey>>(key: K) -> WebSocketAccept {
+		let key: WebSocketKey = key.into();
+		let serialized = format!("{}", key);
 		let mut concat_key = String::with_capacity(serialized.len() + 36);
 		concat_key.push_str(&serialized[..]);
 		concat_key.push_str(MAGIC_GUID);
@@ -53,26 +53,32 @@ impl WebSocketAccept {
 		let bytes = sha1.digest().bytes();
 		WebSocketAccept(bytes)
 	}
-	/// Return the Base64 encoding of this WebSocketAccept
-	pub fn serialize(&self) -> String {
+}
+
+impl From<WebSocketAccept> for HeaderValue {
+	fn from(accept: WebSocketAccept) -> HeaderValue {
+		HeaderValue::from_str(&format!("{}", accept)).unwrap()
+	}
+}
+
+// impl Header for WebSocketAccept {
+// 	fn header_name() -> &'static str {
+// 		"Sec-WebSocket-Accept"
+// 	}
+
+// 	fn parse_header(raw: &hyper::header::Raw) -> hyper::Result<WebSocketAccept> {
+// 		from_one_raw_str(raw)
+// 	}
+
+// 	fn fmt_header(&self, fmt: &mut hyper::header::Formatter) -> fmt::Result {
+// 		fmt.fmt_line(self)
+// 	}
+// }
+
+impl fmt::Display for WebSocketAccept {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let WebSocketAccept(accept) = *self;
-		base64::encode(&accept)
-	}
-}
-
-impl Header for WebSocketAccept {
-	fn header_name() -> &'static str {
-		"Sec-WebSocket-Accept"
-	}
-
-	fn parse_header(raw: &[Vec<u8>]) -> hyper::Result<WebSocketAccept> {
-		from_one_raw_str(raw)
-	}
-}
-
-impl HeaderFormat for WebSocketAccept {
-	fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		write!(fmt, "{}", self.serialize())
+		write!(f, "{}", base64::encode(&accept))
 	}
 }
 

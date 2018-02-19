@@ -1,27 +1,41 @@
 //! Everything you need to create a client connection to a websocket.
 
 use std::borrow::Cow;
+use std::str::FromStr;
+
 pub use url::{Url, ParseError};
-use header::extensions::Extension;
-use header::{WebSocketKey, WebSocketVersion, WebSocketProtocol, WebSocketExtensions, Origin};
-use hyper::header::{Headers, Header, HeaderFormat};
-use hyper::version::HttpVersion;
+use http;
+use http::header::{AsHeaderName, HeaderMap, HeaderValue};
+use http::header::{
+	CONNECTION,
+	HOST,
+	ORIGIN,
+	SEC_WEBSOCKET_ACCEPT,
+	SEC_WEBSOCKET_EXTENSIONS,
+	SEC_WEBSOCKET_KEY,
+	SEC_WEBSOCKET_PROTOCOL,
+	SEC_WEBSOCKET_VERSION,
+	UPGRADE,
+};
+use httparse;
+
+use codec::http::RawStatus;
+use header::{WebSocketKey, WebSocketVersion};
+use header::connection::{Connection, ConnectionOption};
+use header::sec_websocket_extensions::Extension;
+use header::upgrade::{Protocol, ProtocolName, Upgrade};
 
 #[cfg(any(feature="sync", feature="async"))]
 mod common_imports {
 	pub use std::net::TcpStream;
 	pub use std::net::ToSocketAddrs;
+
+	pub use std::io::BufReader;
 	pub use url::Position;
-	pub use hyper::http::h1::Incoming;
-	pub use hyper::http::RawStatus;
-	pub use hyper::status::StatusCode;
-	pub use hyper::buffer::BufReader;
-	pub use hyper::method::Method;
-	pub use hyper::uri::RequestUri;
-	pub use hyper::http::h1::parse_response;
-	pub use hyper::header::{Host, Connection, ConnectionOption, Upgrade, Protocol, ProtocolName};
-	pub use unicase::UniCase;
-	pub use header::WebSocketAccept;
+	pub use ::codec::http::MessageHead;
+	pub use http::{Method, StatusCode, Version, Uri};
+	pub use unicase::Ascii;
+	pub use header::{WebSocketAccept, WebSocketProtocol};
 	pub use result::{WSUrlErrorKind, WebSocketResult, WebSocketError};
 	pub use stream::{self, Stream};
 }
@@ -103,8 +117,8 @@ use self::async_imports::*;
 #[derive(Clone, Debug)]
 pub struct ClientBuilder<'u> {
 	url: Cow<'u, Url>,
-	version: HttpVersion,
-	headers: Headers,
+	version: Version,
+	headers: HeaderMap,
 	version_set: bool,
 	key_set: bool,
 }
@@ -149,10 +163,10 @@ impl<'u> ClientBuilder<'u> {
 	fn init(url: Cow<'u, Url>) -> Self {
 		ClientBuilder {
 			url: url,
-			version: HttpVersion::Http11,
+			version: Version::HTTP_11,
 			version_set: false,
 			key_set: false,
-			headers: Headers::new(),
+			headers: HeaderMap::new(),
 		}
 	}
 
@@ -171,10 +185,11 @@ impl<'u> ClientBuilder<'u> {
 	pub fn add_protocol<P>(mut self, protocol: P) -> Self
 		where P: Into<String>
 	{
-		upsert_header!(self.headers; WebSocketProtocol; {
+		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static(""));
+		/*upsert_header!(self.headers; SEC_WEBSOCKET_PROTOCOL; {
             Some(protos) => protos.0.push(protocol.into()),
             None => WebSocketProtocol(vec![protocol.into()])
-        });
+        });*/
 		self
 	}
 
@@ -195,21 +210,22 @@ impl<'u> ClientBuilder<'u> {
 		where I: IntoIterator<Item = S>,
 		      S: Into<String>
 	{
-		let mut protocols: Vec<String> =
+		let protocols: Vec<String> =
 			protocols.into_iter()
 			         .map(Into::into)
 			         .collect();
 
-		upsert_header!(self.headers; WebSocketProtocol; {
+		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static(""));
+		/*upsert_header!(self.headers; SEC_WEBSOCKET_PROTOCOL; {
             Some(protos) => protos.0.append(&mut protocols),
             None => WebSocketProtocol(protocols)
-        });
+        });*/
 		self
 	}
 
 	/// Removes all the currently set protocols.
 	pub fn clear_protocols(mut self) -> Self {
-		self.headers.remove::<WebSocketProtocol>();
+		self.headers.remove(SEC_WEBSOCKET_PROTOCOL);
 		self
 	}
 
@@ -233,10 +249,11 @@ impl<'u> ClientBuilder<'u> {
 	/// assert!(exts.first().unwrap().name == "permessage-deflate");
 	/// ```
 	pub fn add_extension(mut self, extension: Extension) -> Self {
-		upsert_header!(self.headers; WebSocketExtensions; {
+		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, ::http::header::HeaderValue::from_static(""));
+		/*upsert_header!(self.headers; SEC_WEBSOCKET_EXTENSIONS; {
             Some(protos) => protos.0.push(extension),
             None => WebSocketExtensions(vec![extension])
-        });
+        });*/
 		self
 	}
 
@@ -267,18 +284,18 @@ impl<'u> ClientBuilder<'u> {
 	pub fn add_extensions<I>(mut self, extensions: I) -> Self
 		where I: IntoIterator<Item = Extension>
 	{
-		let mut extensions: Vec<Extension> =
-			extensions.into_iter().collect();
-		upsert_header!(self.headers; WebSocketExtensions; {
+		let extensions: Vec<Extension> = extensions.into_iter().collect();
+		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static(""));
+		/*upsert_header!(self.headers; SEC_WEBSOCKET_EXTENSIONS; {
             Some(protos) => protos.0.append(&mut extensions),
             None => WebSocketExtensions(extensions)
-        });
+        });*/
 		self
 	}
 
 	/// Remove all the extensions added to the builder.
 	pub fn clear_extensions(mut self) -> Self {
-		self.headers.remove::<WebSocketExtensions>();
+		self.headers.remove(SEC_WEBSOCKET_EXTENSIONS);
 		self
 	}
 
@@ -286,14 +303,14 @@ impl<'u> ClientBuilder<'u> {
 	/// Use this only if you know what you're doing, and this almost
 	/// never has to be used.
 	pub fn key(mut self, key: [u8; 16]) -> Self {
-		self.headers.set(WebSocketKey(key));
+		self.headers.insert(SEC_WEBSOCKET_KEY, WebSocketKey(key.into()).into());
 		self.key_set = true;
 		self
 	}
 
 	/// Remove the currently set `Sec-WebSocket-Key` header if any.
 	pub fn clear_key(mut self) -> Self {
-		self.headers.remove::<WebSocketKey>();
+		self.headers.remove(SEC_WEBSOCKET_KEY);
 		self.key_set = false;
 		self
 	}
@@ -303,14 +320,14 @@ impl<'u> ClientBuilder<'u> {
 	/// but one could use this library to create the handshake then use an
 	/// implementation of another websocket version.
 	pub fn version(mut self, version: WebSocketVersion) -> Self {
-		self.headers.set(version);
+		self.headers.insert(SEC_WEBSOCKET_VERSION, version.into());
 		self.version_set = true;
 		self
 	}
 
 	/// Unset the websocket version to be the default (WebSocket 13).
 	pub fn clear_version(mut self) -> Self {
-		self.headers.remove::<WebSocketVersion>();
+		self.headers.remove(SEC_WEBSOCKET_VERSION);
 		self.version_set = false;
 		self
 	}
@@ -320,13 +337,13 @@ impl<'u> ClientBuilder<'u> {
 	/// unauthorized cross-origin use of a WebSocket server, but it is rarely
 	/// send by non-browser clients. Still, it can be useful.
 	pub fn origin(mut self, origin: String) -> Self {
-		self.headers.set(Origin(origin));
+		self.headers.insert(ORIGIN, HeaderValue::from_str(&origin).unwrap());
 		self
 	}
 
 	/// Remove the Origin header from the handshake.
 	pub fn clear_origin(mut self) -> Self {
-		self.headers.remove::<Origin>();
+		self.headers.remove(ORIGIN);
 		self
 	}
 
@@ -345,25 +362,25 @@ impl<'u> ClientBuilder<'u> {
 	/// # let hds = &builder.get_header::<Authorization<String>>().unwrap().0;
 	/// # assert!(hds == &"let me in".to_string());
 	/// ```
-	pub fn custom_headers(mut self, custom_headers: &Headers) -> Self {
-		self.headers.extend(custom_headers.iter());
+	pub fn custom_headers(mut self, custom_headers: HeaderMap) -> Self {
+		self.headers.extend(custom_headers.into_iter());
 		self
 	}
 
 	/// Remove a type of header from the handshake, this is to be used
 	/// with the catch all `custom_headers`.
-	pub fn clear_header<H>(mut self) -> Self
-		where H: Header + HeaderFormat
+	pub fn clear_header<K>(mut self, name: K) -> Self
+		where K: AsHeaderName
 	{
-		self.headers.remove::<H>();
+		self.headers.remove(name);
 		self
 	}
 
 	/// Get a header to inspect it.
-	pub fn get_header<H>(&self) -> Option<&H>
-		where H: Header + HeaderFormat
+	pub fn get_header<K>(&self, name: K) -> Option<&HeaderValue>
+		where K: AsHeaderName
 	{
-		self.headers.get::<H>()
+		self.headers.get(name)
 	}
 
 	/// Connect to a server (finally)!
@@ -474,12 +491,27 @@ impl<'u> ClientBuilder<'u> {
 	{
 		// send request
 		let resource = self.build_request();
-		write!(stream, "GET {} {}\r\n", resource, self.version)?;
-		write!(stream, "{}\r\n", self.headers)?;
+		write!(stream, "GET {} {:?}\r\n", resource, self.version)?;
+		write!(stream, "{:?}\r\n", self.headers)?;
 
 		// wait for a response
-		let mut reader = BufReader::new(stream);
-		let response = parse_response(&mut reader)?;
+		let reader = BufReader::new(stream);
+		let parse = httparse::Response::new(&mut []);
+
+		let response = MessageHead {
+			version: match parse.version {
+				Some(0) => http::Version::HTTP_10,
+				Some(1) => http::Version::HTTP_11,
+				Some(_) | None => return Err(WebSocketError::ResponseError("")),
+			},
+			subject: RawStatus(
+				parse.code.unwrap(),
+				parse.reason.unwrap().into(),
+			),
+			headers: HeaderMap::new(),
+		};
+
+		//let response = parse_response(&mut reader)?;
 
 		// validate
 		self.validate(&response)?;
@@ -540,7 +572,7 @@ impl<'u> ClientBuilder<'u> {
 		// connect to the tcp stream
 		let tcp_stream = match self.async_tcpstream(None, handle) {
 			Ok(t) => t,
-			Err(e) => return future::err(e).boxed(),
+			Err(e) => return Box::new(future::err(e)),
 		};
 
 		let builder = ClientBuilder {
@@ -557,7 +589,7 @@ impl<'u> ClientBuilder<'u> {
 			let (host, connector) = {
 				match builder.extract_host_ssl_conn(ssl_config) {
 					Ok((h, conn)) => (h.to_string(), conn),
-					Err(e) => return future::err(e).boxed(),
+					Err(e) => return Box::new(future::err(e)),
 				}
 			};
 			// secure connection, wrap with ssl
@@ -626,14 +658,14 @@ impl<'u> ClientBuilder<'u> {
 		// connect to the tcp stream
 		let tcp_stream = match self.async_tcpstream(Some(true), handle) {
 			Ok(t) => t,
-			Err(e) => return future::err(e).boxed(),
+			Err(e) => return Box::new(future::err(e)),
 		};
 
 		// configure the tls connection
 		let (host, connector) = {
 			match self.extract_host_ssl_conn(ssl_config) {
 				Ok((h, conn)) => (h.to_string(), conn),
-				Err(e) => return future::err(e).boxed(),
+				Err(e) => return Box::new(future::err(e)),
 			}
 		};
 
@@ -693,7 +725,7 @@ impl<'u> ClientBuilder<'u> {
 	pub fn async_connect_insecure(self, handle: &Handle) -> async::ClientNew<async::TcpStream> {
 		let tcp_stream = match self.async_tcpstream(Some(false), handle) {
 			Ok(t) => t,
-			Err(e) => return future::err(e).boxed(),
+			Err(e) => return Box::new(future::err(e)),
 		};
 
 		let builder = ClientBuilder {
@@ -765,10 +797,10 @@ impl<'u> ClientBuilder<'u> {
 		};
 		let resource = builder.build_request();
 		let framed = stream.framed(::codec::http::HttpClientCodec);
-		let request = Incoming {
+		let request = MessageHead {
 			version: builder.version,
 			headers: builder.headers.clone(),
-			subject: (Method::Get, RequestUri::AbsolutePath(resource)),
+			subject: (Method::GET, resource.parse().unwrap()),
 		};
 
 		let future = framed
@@ -821,34 +853,33 @@ impl<'u> ClientBuilder<'u> {
 
 	#[cfg(any(feature="sync", feature="async"))]
 	fn build_request(&mut self) -> String {
+
 		// enter host if available (unix sockets don't have hosts)
 		if let Some(host) = self.url.host_str() {
-			self.headers
-			    .set(Host {
-			             hostname: host.to_string(),
-			             port: self.url.port(),
-			         });
+			
+			self.headers.insert(HOST, match self.url.port() {
+				None | Some(80) | Some(443) => HeaderValue::from_str(&self.url.host_str().unwrap()).unwrap(),
+				Some(port) => HeaderValue::from_str(&format!("{}:{}", self.url.host_str().unwrap(), port)).unwrap(),
+			});
 		}
 
-		self.headers
-		    .set(Connection(vec![
-                ConnectionOption::ConnectionHeader(UniCase("Upgrade".to_string()))
-            ]));
+		self.headers.insert(CONNECTION, Connection(vec![
+			ConnectionOption::ConnectionHeader(Ascii::new("Upgrade".to_string()))
+		]).into());
 
-		self.headers
-		    .set(Upgrade(vec![
+		self.headers.insert(UPGRADE, Upgrade(vec![
 			Protocol {
 				name: ProtocolName::WebSocket,
 				version: None,
 			},
-		]));
+		]).into());
 
 		if !self.version_set {
-			self.headers.set(WebSocketVersion::WebSocket13);
+			self.headers.insert(SEC_WEBSOCKET_VERSION, WebSocketVersion::WebSocket13.into());
 		}
 
 		if !self.key_set {
-			self.headers.set(WebSocketKey::new());
+			self.headers.insert(SEC_WEBSOCKET_KEY, WebSocketKey::new().into());
 		}
 
 		// send request
@@ -857,36 +888,47 @@ impl<'u> ClientBuilder<'u> {
 	}
 
 	#[cfg(any(feature="sync", feature="async"))]
-	fn validate(&self, response: &Incoming<RawStatus>) -> WebSocketResult<()> {
-		let status = StatusCode::from_u16(response.subject.0);
+	fn validate(&self, response: &MessageHead<RawStatus>) -> WebSocketResult<()> {
 
-		if status != StatusCode::SwitchingProtocols {
-			return Err(WebSocketError::ResponseError("Status code must be Switching Protocols"));
-		}
+		let status: Option<StatusCode> = match StatusCode::from_u16(response.subject.0) {
+			Ok(status) => {
+				if status != StatusCode::SWITCHING_PROTOCOLS {
+					None
+				} else {
+					Some(status)
+				}
+			},
+			_ => None,
+		};
 
-		let key =
-			self.headers
-			    .get::<WebSocketKey>()
-			    .ok_or(WebSocketError::RequestError("Request Sec-WebSocket-Key was invalid"))?;
+		let status = match status {
+			Some(status) => status,
+			_ => return Err(WebSocketError::ResponseError("Status code must be Switching Protocols")),
+		};
 
-		if response.headers.get() != Some(&(WebSocketAccept::new(key))) {
+		let key: WebSocketKey =
+			self.headers.get(SEC_WEBSOCKET_KEY)
+				.map(|key| WebSocketKey::from_str(key.to_str().unwrap()).unwrap())
+				.ok_or(WebSocketError::RequestError("Request Sec-WebSocket-Key was invalid"))?;
+
+		if response.headers.get(SEC_WEBSOCKET_ACCEPT) != Some(&(WebSocketAccept::new(key)).into()) {
 			return Err(WebSocketError::ResponseError("Sec-WebSocket-Accept is invalid"));
 		}
 
-		if response.headers.get() !=
-		   Some(&(Upgrade(vec![
+		if response.headers.get(UPGRADE) != Some(&(Upgrade(vec![
 			Protocol {
 				name: ProtocolName::WebSocket,
 				version: None,
 			},
-		]))) {
+		]).into())) {
 			return Err(WebSocketError::ResponseError("Upgrade field must be WebSocket"));
 		}
 
-		if self.headers.get() !=
-		   Some(&(Connection(vec![
-                ConnectionOption::ConnectionHeader(UniCase("Upgrade".to_string())),
-            ]))) {
+
+
+		if self.headers.get(CONNECTION) != Some(&(Connection(vec![
+			ConnectionOption::ConnectionHeader(Ascii::new("Upgrade".to_string())),
+		]).into())) {
 			return Err(WebSocketError::ResponseError("Connection field must be 'Upgrade'"));
 		}
 
@@ -951,9 +993,11 @@ mod tests {
 			.unwrap()
 			.add_protocol("protobeard");
 
-		let protos = &builder.headers.get::<WebSocketProtocol>().unwrap().0;
-		assert!(protos.contains(&"protobeard".to_string()));
-		assert!(protos.len() == 1);
+		let protos: WebSocketProtocol = builder.headers.get(SEC_WEBSOCKET_PROTOCOL).unwrap()
+			.to_str().unwrap()
+			.parse().unwrap();
+		assert!(protos.0.contains(&"protobeard".to_string()));
+		assert!(protos.0.len() == 1);
 
 		let builder = ClientBuilder::new("ws://example.org/hello")
 			.unwrap()
@@ -961,10 +1005,12 @@ mod tests {
 			.clear_protocols()
 			.add_protocols(vec!["electric", "boogaloo"]);
 
-		let protos = &builder.headers.get::<WebSocketProtocol>().unwrap().0;
+		let protos: WebSocketProtocol = builder.headers.get(SEC_WEBSOCKET_PROTOCOL).unwrap()
+			.to_str().unwrap()
+			.parse().unwrap();
 
-		assert!(protos.contains(&"boogaloo".to_string()));
-		assert!(protos.contains(&"electric".to_string()));
-		assert!(!protos.contains(&"rust-websocket".to_string()));
+		assert!(protos.0.contains(&"boogaloo".to_string()));
+		assert!(protos.0.contains(&"electric".to_string()));
+		assert!(!protos.0.contains(&"rust-websocket".to_string()));
 	}
 }

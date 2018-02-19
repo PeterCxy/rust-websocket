@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(all(test, feature = "nightly"), feature(test))]
+#![feature(try_from)]
 
 #![deny(unused_mut)]
 
@@ -28,6 +29,8 @@
 //! # Extending Rust-WebSocket
 //! The `ws` module contains the traits and functions used by Rust-WebSocket at a lower
 //! level. Their usage is explained in the module documentation.
+extern crate http;
+extern crate httparse;
 extern crate hyper;
 extern crate unicase;
 pub extern crate url;
@@ -53,21 +56,6 @@ extern crate bitflags;
 
 #[cfg(all(feature = "nightly", test))]
 extern crate test;
-
-macro_rules! upsert_header {
-    ($headers:expr; $header:ty; {
-        Some($pat:pat) => $some_match:expr,
-        None => $default:expr
-    }) => {{
-        if $headers.has::<$header>() {
-            if let Some($pat) = $headers.get_mut::<$header>() {
-                $some_match
-            }
-        } else {
-            $headers.set($default);
-        }
-    }}
-}
 
 pub mod ws;
 pub mod dataframe;

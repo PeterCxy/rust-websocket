@@ -3,17 +3,21 @@
 //! These headers are commonly used in WebSocket requests and responses.
 //! The `Header` trait from the `hyper` crate is used.
 
-pub use self::key::WebSocketKey;
-pub use self::accept::WebSocketAccept;
-pub use self::protocol::WebSocketProtocol;
-pub use self::version::WebSocketVersion;
-pub use self::extensions::WebSocketExtensions;
+pub use self::host::Host;
 pub use self::origin::Origin;
-pub use hyper::header::*;
+pub use self::sec_websocket_key::WebSocketKey;
+pub use self::sec_websocket_accept::WebSocketAccept;
+pub use self::sec_websocket_protocol::WebSocketProtocol;
+pub use self::sec_websocket_version::WebSocketVersion;
+pub use self::sec_websocket_extensions::WebSocketExtensions;
+pub use self::upgrade::Upgrade;
 
-mod accept;
-mod key;
-mod protocol;
-mod version;
-pub mod extensions;
+pub mod connection;
+mod host;
 mod origin;
+mod sec_websocket_accept;
+mod sec_websocket_key;
+mod sec_websocket_protocol;
+mod sec_websocket_version;
+pub mod sec_websocket_extensions;
+pub mod upgrade;

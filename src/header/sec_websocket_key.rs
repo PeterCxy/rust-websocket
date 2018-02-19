@@ -1,11 +1,12 @@
-use base64;
-use hyper::header::{Header, HeaderFormat};
-use hyper::header::parsing::from_one_raw_str;
-use hyper;
-use std::fmt::{self, Debug};
-use rand;
 use std::mem;
 use std::str::FromStr;
+use std::convert::TryFrom;
+
+use base64;
+use http::header::HeaderValue;
+//use hyper::header::parsing::from_one_raw_str;
+use std::fmt::{self, Debug};
+use rand;
 use result::{WebSocketResult, WebSocketError};
 
 /// Represents a Sec-WebSocket-Key header.
@@ -14,7 +15,7 @@ pub struct WebSocketKey(pub [u8; 16]);
 
 impl Debug for WebSocketKey {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "WebSocketKey({})", self.serialize())
+		write!(f, "WebSocketKey({})", self)
 	}
 }
 
@@ -44,31 +45,44 @@ impl WebSocketKey {
 	/// Generate a new, random WebSocketKey
 	pub fn new() -> WebSocketKey {
 		let key: [u8; 16] = unsafe {
-			// Much faster than calling random() several times
+			// Much faster than calling random()q several times
 			mem::transmute(rand::random::<(u64, u64)>())
 		};
 		WebSocketKey(key)
 	}
-	/// Return the Base64 encoding of this WebSocketKey
-	pub fn serialize(&self) -> String {
-		let WebSocketKey(key) = *self;
-		base64::encode(&key)
+}
+
+impl From<WebSocketKey> for HeaderValue {
+	fn from(key: WebSocketKey) -> Self {
+		HeaderValue::from_str(&format!("{}", key)).unwrap()
 	}
 }
 
-impl Header for WebSocketKey {
-	fn header_name() -> &'static str {
-		"Sec-WebSocket-Key"
-	}
-
-	fn parse_header(raw: &[Vec<u8>]) -> hyper::Result<WebSocketKey> {
-		from_one_raw_str(raw)
+impl TryFrom<HeaderValue> for WebSocketKey {
+	type Error = ();
+	fn try_from(value: HeaderValue) -> Result<WebSocketKey, ()> {
+		Ok(WebSocketKey([0u8; 16]))
 	}
 }
 
-impl HeaderFormat for WebSocketKey {
-	fn fmt_header(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		write!(fmt, "{}", self.serialize())
+// impl Header for WebSocketKey {
+// 	fn header_name() -> &'static str {
+// 		"Sec-WebSocket-Key"
+// 	}
+
+// 	fn parse_header(raw: &hyper::header::Raw) -> hyper::Result<WebSocketKey> {
+// 		from_one_raw_str(raw)
+// 	}
+
+// 	fn fmt_header(&self, fmt: &mut hyper::header::Formatter) -> fmt::Result {
+// 		fmt.fmt_line(self)
+// 	}
+// }
+
+impl fmt::Display for WebSocketKey {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		let WebSocketKey(accept) = *self;
+		write!(f, "{}", base64::encode(&accept))
 	}
 }
 

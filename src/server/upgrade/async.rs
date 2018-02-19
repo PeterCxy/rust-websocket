@@ -8,9 +8,8 @@
 use super::{HyperIntoWsError, WsUpgrade, Request, validate};
 use std::io::{self, ErrorKind};
 use tokio_io::codec::{Framed, FramedParts};
-use hyper::header::Headers;
-use hyper::http::h1::Incoming;
-use hyper::status::StatusCode;
+use http::header::HeaderMap;
+use http::StatusCode;
 use stream::async::Stream;
 use futures::{Sink, Future};
 use futures::Stream as StreamTrait;
@@ -19,6 +18,8 @@ use codec::http::HttpServerCodec;
 use codec::ws::{MessageCodec, Context};
 use bytes::BytesMut;
 use client::async::ClientNew;
+
+use ::codec::http::MessageHead;
 
 /// An asynchronous websocket upgrade.
 ///
@@ -77,11 +78,11 @@ impl<S> WsUpgrade<S, BytesMut>
 	/// Asynchronously accept the websocket handshake, then create a client.
 	/// This will asynchronously send a response accepting the connection
 	/// with custom headers in the response and create a websocket client.
-	pub fn accept_with(self, custom_headers: &Headers) -> ClientNew<S> {
+	pub fn accept_with(self, custom_headers: HeaderMap) -> ClientNew<S> {
 		self.internal_accept(Some(custom_headers))
 	}
 
-	fn internal_accept(mut self, custom_headers: Option<&Headers>) -> ClientNew<S> {
+	fn internal_accept(mut self, custom_headers: Option<HeaderMap>) -> ClientNew<S> {
 		let status = self.prepare_headers(custom_headers);
 		let WsUpgrade { headers, stream, request, buffer } = self;
 
@@ -92,7 +93,7 @@ impl<S> WsUpgrade<S, BytesMut>
 		                                },
 		                                HttpServerCodec);
 
-		let future = duplex.send(Incoming {
+		let future = duplex.send(MessageHead {
 		                             version: request.version,
 		                             subject: status,
 		                             headers: headers.clone(),
@@ -117,13 +118,13 @@ impl<S> WsUpgrade<S, BytesMut>
 	/// deconstruct `self` into it's original stream.
 	///  The stream being returned is framed with the
 	/// `HttpServerCodec` since that was used to send the rejection message.
-	pub fn reject_with(self, headers: &Headers) -> Send<Framed<S, HttpServerCodec>> {
+	pub fn reject_with(self, headers: HeaderMap) -> Send<Framed<S, HttpServerCodec>> {
 		self.internal_reject(Some(headers))
 	}
 
-	fn internal_reject(mut self, headers: Option<&Headers>) -> Send<Framed<S, HttpServerCodec>> {
+	fn internal_reject(mut self, headers: Option<HeaderMap>) -> Send<Framed<S, HttpServerCodec>> {
 		if let Some(custom) = headers {
-			self.headers.extend(custom.iter());
+			self.headers.extend(custom.into_iter());
 		}
 		let duplex = Framed::from_parts(FramedParts {
 		                                    inner: self.stream,
@@ -131,9 +132,9 @@ impl<S> WsUpgrade<S, BytesMut>
 		                                    writebuf: BytesMut::with_capacity(0),
 		                                },
 		                                HttpServerCodec);
-		duplex.send(Incoming {
+		duplex.send(MessageHead {
 		                version: self.request.version,
-		                subject: StatusCode::BadRequest,
+		                subject: StatusCode::BAD_REQUEST,
 		                headers: self.headers,
 		            })
 	}
@@ -230,7 +231,7 @@ impl<S> IntoWs for S
           })
           .map(|(m, stream, buffer)| {
               WsUpgrade {
-                  headers: Headers::new(),
+                  headers: HeaderMap::new(),
                   stream: stream,
                   request: m,
                   buffer: buffer,

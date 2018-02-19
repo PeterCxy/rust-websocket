@@ -10,12 +10,12 @@ fn main() {
 	for request in server.filter_map(Result::ok) {
 		// Spawn a new thread for each connection.
 		thread::spawn(move || {
-			if !request.protocols().contains(&"rust-websocket".to_string()) {
+			if !request.protocols().contains(&"rust-websocket") {
 				request.reject().unwrap();
 				return;
 			}
 
-			let mut client = request.use_protocol("rust-websocket").accept().unwrap();
+			let mut client = request.use_protocols(vec!["rust-websocket"]).accept().unwrap();
 
 			let ip = client.peer_addr().unwrap();
 

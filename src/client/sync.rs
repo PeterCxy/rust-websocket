@@ -3,8 +3,14 @@ use std::net::TcpStream;
 use std::net::SocketAddr;
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
-use hyper::header::Headers;
-use hyper::buffer::BufReader;
+use std::str::{self, FromStr};
+
+use http::header::HeaderMap;
+use http::header::{
+	SEC_WEBSOCKET_EXTENSIONS,
+	SEC_WEBSOCKET_PROTOCOL
+};
+use std::io::BufReader;
 
 use ws;
 use ws::sender::Sender as SenderTrait;
@@ -14,14 +20,13 @@ use message::OwnedMessage;
 use result::WebSocketResult;
 use stream::sync::{AsTcpStream, Stream, Splittable, Shutdown};
 use dataframe::DataFrame;
-use header::{WebSocketProtocol, WebSocketExtensions};
-use header::extensions::Extension;
-
 use ws::dataframe::DataFrame as DataFrameable;
 use sender::Sender;
 use receiver::Receiver;
 pub use sender::Writer;
 pub use receiver::Reader;
+
+use header::sec_websocket_extensions::Extension;
 
 /// Represents a WebSocket client, which can send and receive messages/data frames.
 ///
@@ -56,7 +61,7 @@ pub struct Client<S>
 	where S: Stream
 {
 	stream: BufReader<S>,
-	headers: Headers,
+	headers: HeaderMap,
 	sender: Sender,
 	receiver: Receiver,
 }
@@ -118,7 +123,7 @@ impl<S> Client<S>
 	#[doc(hidden)]
 	pub fn unchecked(
 		stream: BufReader<S>,
-		headers: Headers,
+		headers: HeaderMap,
 		out_mask: bool,
 		in_mask: bool,
 	) -> Self {
@@ -173,7 +178,7 @@ impl<S> Client<S>
 
 	/// Access the headers that were sent in the server's handshake response.
 	/// This is a catch all for headers other than protocols and extensions.
-	pub fn headers(&self) -> &Headers {
+	pub fn headers(&self) -> &HeaderMap {
 		&self.headers
 	}
 
@@ -192,21 +197,40 @@ impl<S> Client<S>
 	/// // be sure to check the protocol is there!
 	/// assert!(client.protocols().iter().any(|p| p as &str == "xmpp"));
 	/// ```
-	pub fn protocols(&self) -> &[String] {
+	pub fn protocols<'a>(&'a self) -> Vec<&str> {
 		self.headers
-		    .get::<WebSocketProtocol>()
-		    .map(|p| p.0.as_slice())
-		    .unwrap_or(&[])
+		    .get(SEC_WEBSOCKET_PROTOCOL)
+		    .map(|e| {
+				str::from_utf8(e.as_bytes()).unwrap()
+					.split(',')
+					.filter_map(|x| match x.trim() {
+						"" => None,
+						y => Some(y),
+					})
+					.collect::<Vec<&str>>()
+			})
+			.unwrap_or(vec![])
 	}
 
 	/// If you supplied a protocol, be sure to check if it was accepted by the
 	/// server here. Since no extensions are implemented out of the box yet, using
 	/// one will require its own implementation.
-	pub fn extensions(&self) -> &[Extension] {
+	pub fn extensions(&self) -> Vec<Extension> {
 		self.headers
-		    .get::<WebSocketExtensions>()
-		    .map(|e| e.0.as_slice())
-		    .unwrap_or(&[])
+			.get(SEC_WEBSOCKET_EXTENSIONS)
+			.map(|e| {
+				str::from_utf8(e.as_bytes()).unwrap()
+					.split(',')
+					.filter_map(|x| match x.trim() {
+						"" => None,
+						y => Some(y),
+					})
+					.filter_map(|x| match Extension::from_str(x) {
+						Ok(ext) => Some(ext),
+						_ => None,
+					})
+					.collect::<Vec<Extension>>()
+			}).unwrap_or(vec![])
 	}
 
 	/// Get a reference to the stream.
@@ -286,9 +310,9 @@ impl<S> Client<S>
 	/// these buffered bytes are returned in the form
 	///
 	/// `(byte_buffer: Vec<u8>, buffer_capacity: usize, buffer_position: usize)`
-	pub fn into_stream(self) -> (S, Option<(Vec<u8>, usize, usize)>) {
-		let (stream, buf, pos, cap) = self.stream.into_parts();
-		(stream, Some((buf, pos, cap)))
+	pub fn into_stream(self) -> (S, Option<(Vec<u8>,)>) {
+		let stream = self.stream.into_inner();
+		(stream, None)
 	}
 
 	/// Returns an iterator over incoming messages.
@@ -363,10 +387,10 @@ impl<S> Client<S>
 	pub fn split
 		(self)
 		 -> IoResult<(Reader<<S as Splittable>::Reader>, Writer<<S as Splittable>::Writer>)> {
-		let (stream, buf, pos, cap) = self.stream.into_parts();
+		let stream = self.stream.into_inner();
 		let (read, write) = stream.split()?;
 		Ok((Reader {
-		        stream: BufReader::from_parts(read, buf, pos, cap),
+		        stream: BufReader::new(read),
 		        receiver: self.receiver,
 		    },
 		    Writer {
