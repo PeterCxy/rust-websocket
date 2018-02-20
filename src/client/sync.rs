@@ -190,7 +190,7 @@ impl<S> Client<S>
 	/// ```rust,no_run
 	/// # use websocket::ClientBuilder;
 	/// let mut client = ClientBuilder::new("wss://test.fysh.in").unwrap()
-	///     .add_protocol("xmpp")
+	///     .add_protocols(vec!["xmpp"])
 	///     .connect_insecure()
 	///     .unwrap();
 	///

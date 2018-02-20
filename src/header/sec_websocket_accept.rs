@@ -35,7 +35,7 @@ impl FromStr for WebSocketAccept {
 				}
 				Ok(WebSocketAccept(array))
 			}
-			Err(_) => Err(WebSocketError::ProtocolError("Invalid Sec-WebSocket-Accept ")),
+			Err(_) => Err(WebSocketError::ProtocolError("Invalid Sec-WebSocket-Accept")),
 		}
 	}
 }

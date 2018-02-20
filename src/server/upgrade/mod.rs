@@ -24,7 +24,7 @@ use http::{Method, StatusCode, Uri};
 #[cfg(any(feature="sync", feature="async"))]
 use http::Version;
 
-use codec::http::MessageHead;
+use codec::http::RequestHead;
 use header::{WebSocketAccept, WebSocketKey, WebSocketVersion};
 use header::connection::{Connection, ConnectionOption};
 use header::upgrade::{Protocol, ProtocolName, Upgrade};
@@ -35,9 +35,6 @@ pub mod async;
 
 #[cfg(feature="sync")]
 pub mod sync;
-
-/// A typical request from hyper
-pub type Request = MessageHead<(Method, Uri)>;
 
 /// Intermediate representation of a half created websocket session.
 /// Should be used to examine the client's handshake
@@ -57,7 +54,7 @@ pub struct WsUpgrade<S, B>
 	/// The stream that will be used to read from / write to.
 	pub stream: S,
 	/// The handshake request, filled with useful metadata.
-	pub request: Request,
+	pub request: RequestHead,
 	/// Some buffered data from the stream, if it exists.
 	pub buffer: B,
 }

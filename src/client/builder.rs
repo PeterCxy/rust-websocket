@@ -1,11 +1,13 @@
 //! Everything you need to create a client connection to a websocket.
 
 use std::borrow::Cow;
+use std::io::BufRead;
 use std::str::FromStr;
 
+use bytes::{BufMut, BytesMut};
 pub use url::{Url, ParseError};
 use http;
-use http::header::{AsHeaderName, HeaderMap, HeaderValue};
+use http::header::{AsHeaderName, HeaderMap, HeaderName, HeaderValue};
 use http::header::{
 	CONNECTION,
 	HOST,
@@ -19,8 +21,9 @@ use http::header::{
 };
 use httparse;
 
-use codec::http::RawStatus;
-use header::{WebSocketKey, WebSocketVersion};
+use codec::http::{MAX_HEADERS, HeaderIndices, HeadersAsBytesIter, ResponseHead};
+use codec::http::record_header_indices;
+use header::{WebSocketExtensions, WebSocketKey, WebSocketVersion};
 use header::connection::{Connection, ConnectionOption};
 use header::sec_websocket_extensions::Extension;
 use header::upgrade::{Protocol, ProtocolName, Upgrade};
@@ -87,18 +90,20 @@ use self::async_imports::*;
 /// But there are so many more possibilities:
 ///
 /// ```rust,no_run
+/// extern crate http;
+/// extern crate websocket;
+/// use http::header::{COOKIE, HeaderMap, HeaderValue};
 /// use websocket::ClientBuilder;
-/// use websocket::header::{Headers, Cookie};
+/// fn main() {
 ///
 /// let default_protos = vec!["ping", "chat"];
-/// let mut my_headers = Headers::new();
-/// my_headers.set(Cookie(vec!["userid=1".to_owned()]));
+/// let mut my_headers = HeaderMap::new();
+/// my_headers.insert(COOKIE, HeaderValue::from_static("userid=1"));
 ///
 /// let mut builder = ClientBuilder::new("ws://myapp.com/room/discussion")
 ///     .unwrap()
-///     .add_protocols(default_protos) // any IntoIterator
-///     .add_protocol("video-chat")
-///     .custom_headers(&my_headers);
+///     .add_protocols(vec!["video-chat"])
+///     .custom_headers(my_headers);
 ///
 /// // connect to a chat server with a user
 /// let client = builder.connect_insecure().unwrap();
@@ -106,8 +111,9 @@ use self::async_imports::*;
 /// // clone the builder and take it with you
 /// let not_logged_in = builder
 ///     .clone()
-///     .clear_header::<Cookie>()
+///     .clear_header(COOKIE)
 ///     .connect_insecure().unwrap();
+/// }
 /// ```
 ///
 /// You may have noticed we're not using SSL, have no fear, SSL is included!
@@ -170,41 +176,25 @@ impl<'u> ClientBuilder<'u> {
 		}
 	}
 
-	/// Adds a user-defined protocol to the handshake, the server will be
-	/// given a list of these protocols and will send back the ones it accepts.
-	///
-	/// ```rust
-	/// # use websocket::ClientBuilder;
-	/// # use websocket::header::WebSocketProtocol;
-	/// let builder = ClientBuilder::new("wss://my-twitch-clone.rs").unwrap()
-	///     .add_protocol("my-chat-proto");
-	///
-	/// let protos = &builder.get_header::<WebSocketProtocol>().unwrap().0;
-	/// assert!(protos.contains(&"my-chat-proto".to_string()));
-	/// ```
-	pub fn add_protocol<P>(mut self, protocol: P) -> Self
-		where P: Into<String>
-	{
-		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static(""));
-		/*upsert_header!(self.headers; SEC_WEBSOCKET_PROTOCOL; {
-            Some(protos) => protos.0.push(protocol.into()),
-            None => WebSocketProtocol(vec![protocol.into()])
-        });*/
-		self
-	}
-
 	/// Adds a user-defined protocols to the handshake.
 	/// This can take many kinds of iterators.
 	///
 	/// ```rust
+	/// # extern crate http;
+	/// # extern crate websocket;
+	/// # use http::header::SEC_WEBSOCKET_PROTOCOL;
 	/// # use websocket::ClientBuilder;
 	/// # use websocket::header::WebSocketProtocol;
+	/// fn main() {
 	/// let builder = ClientBuilder::new("wss://my-twitch-clone.rs").unwrap()
 	///     .add_protocols(vec!["pubsub", "sub.events"]);
 	///
-	/// let protos = &builder.get_header::<WebSocketProtocol>().unwrap().0;
+	/// let protos = &builder.get_header(SEC_WEBSOCKET_PROTOCOL).unwrap()
+	///     .to_str().unwrap()
+	///     .parse::<WebSocketProtocol>().unwrap().0;
 	/// assert!(protos.contains(&"pubsub".to_string()));
 	/// assert!(protos.contains(&"sub.events".to_string()));
+	/// }
 	/// ```
 	pub fn add_protocols<I, S>(mut self, protocols: I) -> Self
 		where I: IntoIterator<Item = S>,
@@ -212,14 +202,10 @@ impl<'u> ClientBuilder<'u> {
 	{
 		let protocols: Vec<String> =
 			protocols.into_iter()
-			         .map(Into::into)
-			         .collect();
+				.map(Into::into)
+				.collect();
 
-		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_static(""));
-		/*upsert_header!(self.headers; SEC_WEBSOCKET_PROTOCOL; {
-            Some(protos) => protos.0.append(&mut protocols),
-            None => WebSocketProtocol(protocols)
-        });*/
+		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, WebSocketProtocol(protocols).into());
 		self
 	}
 
@@ -229,42 +215,17 @@ impl<'u> ClientBuilder<'u> {
 		self
 	}
 
-	/// Adds an extension to the connection.
-	/// Unlike protocols, extensions can be below the application level
-	/// (like compression). Currently no extensions are supported
-	/// out-of-the-box but one can still use them by using their own
-	/// implementation. Support is coming soon though.
-	///
-	/// ```rust
-	/// # use websocket::ClientBuilder;
-	/// # use websocket::header::{WebSocketExtensions};
-	/// # use websocket::header::extensions::Extension;
-	/// let builder = ClientBuilder::new("wss://skype-for-linux-lol.com").unwrap()
-	///     .add_extension(Extension {
-	///         name: "permessage-deflate".to_string(),
-	///         params: vec![],
-	///     });
-	///
-	/// let exts = &builder.get_header::<WebSocketExtensions>().unwrap().0;
-	/// assert!(exts.first().unwrap().name == "permessage-deflate");
-	/// ```
-	pub fn add_extension(mut self, extension: Extension) -> Self {
-		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, ::http::header::HeaderValue::from_static(""));
-		/*upsert_header!(self.headers; SEC_WEBSOCKET_EXTENSIONS; {
-            Some(protos) => protos.0.push(extension),
-            None => WebSocketExtensions(vec![extension])
-        });*/
-		self
-	}
-
 	/// Adds some extensions to the connection.
 	/// Currently no extensions are supported out-of-the-box but one can
 	/// still use them by using their own implementation. Support is coming soon though.
 	///
 	/// ```rust
+	/// # extern crate http;
+	/// # extern crate websocket;
+	/// # use http::header::SEC_WEBSOCKET_EXTENSIONS;
 	/// # use websocket::ClientBuilder;
-	/// # use websocket::header::{WebSocketExtensions};
-	/// # use websocket::header::extensions::Extension;
+	/// # use websocket::header::sec_websocket_extensions::{Extension, WebSocketExtensions};
+	/// fn main() {
 	/// let builder = ClientBuilder::new("wss://moxie-chat.org").unwrap()
 	///     .add_extensions(vec![
 	///         Extension {
@@ -277,19 +238,17 @@ impl<'u> ClientBuilder<'u> {
 	///         },
 	///     ]);
 	///
-	/// # let exts = &builder.get_header::<WebSocketExtensions>().unwrap().0;
+	/// # let exts = &builder.get_header(SEC_WEBSOCKET_EXTENSIONS).unwrap()
+	/// #     .to_str().unwrap().parse::<WebSocketExtensions>().unwrap();
 	/// # assert!(exts.first().unwrap().name == "permessage-deflate");
 	/// # assert!(exts.last().unwrap().name == "crypt-omemo");
+	/// }
 	/// ```
 	pub fn add_extensions<I>(mut self, extensions: I) -> Self
 		where I: IntoIterator<Item = Extension>
 	{
-		let extensions: Vec<Extension> = extensions.into_iter().collect();
-		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static(""));
-		/*upsert_header!(self.headers; SEC_WEBSOCKET_EXTENSIONS; {
-            Some(protos) => protos.0.append(&mut extensions),
-            None => WebSocketExtensions(extensions)
-        });*/
+		let extensions = WebSocketExtensions(extensions.into_iter().collect());
+		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, extensions.into());
 		self
 	}
 
@@ -351,16 +310,20 @@ impl<'u> ClientBuilder<'u> {
 	/// the process here is more manual.
 	///
 	/// ```rust
+	/// # extern crate http;
+	/// # extern crate websocket;
+	/// # use http::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 	/// # use websocket::ClientBuilder;
-	/// # use websocket::header::{Headers, Authorization};
-	/// let mut headers = Headers::new();
-	/// headers.set(Authorization("let me in".to_owned()));
+	/// fn main() {
+	/// let mut headers = HeaderMap::new();
+	/// headers.insert(AUTHORIZATION, HeaderValue::from_str("let me in").unwrap());
 	///
 	/// let builder = ClientBuilder::new("ws://moz.illest").unwrap()
-	///     .custom_headers(&headers);
+	///     .custom_headers(headers);
 	///
-	/// # let hds = &builder.get_header::<Authorization<String>>().unwrap().0;
+	/// # let hds = &builder.get_header(AUTHORIZATION).unwrap().to_str().unwrap();
 	/// # assert!(hds == &"let me in".to_string());
+	/// }
 	/// ```
 	pub fn custom_headers(mut self, custom_headers: HeaderMap) -> Self {
 		self.headers.extend(custom_headers.into_iter());
@@ -495,23 +458,61 @@ impl<'u> ClientBuilder<'u> {
 		write!(stream, "{:?}\r\n", self.headers)?;
 
 		// wait for a response
-		let reader = BufReader::new(stream);
-		let parse = httparse::Response::new(&mut []);
+		let mut buf = String::new();
+		let mut reader = BufReader::new(stream);
 
-		let response = MessageHead {
-			version: match parse.version {
-				Some(0) => http::Version::HTTP_10,
-				Some(1) => http::Version::HTTP_11,
-				Some(_) | None => return Err(WebSocketError::ResponseError("")),
-			},
-			subject: RawStatus(
-				parse.code.unwrap(),
-				parse.reason.unwrap().into(),
-			),
-			headers: HeaderMap::new(),
+		loop {
+			reader.read_line(&mut buf);
+			if &buf[buf.len() - 4..] == "\r\n\r\n" {
+				break;
+			}
+		}
+
+		println!("Response: {}", buf);
+
+		let mut buf_bytes = BytesMut::from(buf);
+
+		let mut headers_indices = [HeaderIndices {
+			name: (0, 0),
+			value: (0, 0)
+		}; MAX_HEADERS];
+
+		let (len, status, version, headers_len) = {
+			let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+			println!("Response.parse([Header; {}], [u8; {}])", headers.len(), buf_bytes.len());
+			let mut res = httparse::Response::new(&mut headers);
+			let bytes = buf_bytes.as_ref();
+			match try!(res.parse(bytes)) {
+				httparse::Status::Complete(len) => {
+					println!("Response.parse Complete({})", len);
+					let status = try!(StatusCode::from_u16(res.code.unwrap()).map_err(|_| httparse::Error::Status));
+					let version = if res.version.unwrap() == 1 {
+						Version::HTTP_11
+					} else {
+						Version::HTTP_10
+					};
+					record_header_indices(bytes, &res.headers, &mut headers_indices);
+					let headers_len = res.headers.len();
+					(len, status, version, headers_len)
+				},
+				httparse::Status::Partial => return Err(httparse::Error::Status.into()),
+			}
 		};
 
-		//let response = parse_response(&mut reader)?;
+		let mut headers = HeaderMap::with_capacity(headers_len);
+		let slice = buf_bytes.split_to(len).freeze();
+
+		let new_headers = HeadersAsBytesIter {
+			headers: headers_indices[..headers_len].iter(),
+			slice: slice,
+		};
+		headers.extend(new_headers);
+
+		let response = ResponseHead {
+			version: version,
+			subject: status,
+			headers: headers,
+		};
 
 		// validate
 		self.validate(&response)?;
@@ -754,13 +755,17 @@ impl<'u> ClientBuilder<'u> {
 	/// # Example
 	///
 	/// ```rust
+	/// # extern crate http;
+	/// # extern crate websocket;
 	/// use websocket::header::WebSocketProtocol;
 	/// use websocket::ClientBuilder;
 	/// use websocket::sync::stream::ReadWritePair;
 	/// use websocket::futures::Future;
 	/// use websocket::async::Core;
+	/// # use http::header::SEC_WEBSOCKET_PROTOCOL;
 	/// # use std::io::Cursor;
 	///
+	/// fn main() {
 	/// let mut core = Core::new().unwrap();
 	///
 	/// let accept = b"\
@@ -778,11 +783,13 @@ impl<'u> ClientBuilder<'u> {
 	///     .key(b"the sample nonce".clone())
 	///     .async_connect_on(ReadWritePair(input, output))
 	///     .map(|(_, headers)| {
-	///         let proto: &WebSocketProtocol = headers.get().unwrap();
+	///         let proto = headers.get(SEC_WEBSOCKET_PROTOCOL).unwrap().to_str().unwrap()
+	///             .parse::<WebSocketProtocol>().unwrap();
 	///         assert_eq!(proto.0.first().unwrap(), "proto-metheus")
 	///     });
 	///
 	/// core.run(client).unwrap();
+	/// }
 	/// ```
 	#[cfg(feature="async")]
 	pub fn async_connect_on<S>(self, stream: S) -> async::ClientNew<S>
@@ -888,17 +895,12 @@ impl<'u> ClientBuilder<'u> {
 	}
 
 	#[cfg(any(feature="sync", feature="async"))]
-	fn validate(&self, response: &MessageHead<RawStatus>) -> WebSocketResult<()> {
+	fn validate(&self, response: &ResponseHead) -> WebSocketResult<()> {
 
-		let status: Option<StatusCode> = match StatusCode::from_u16(response.subject.0) {
-			Ok(status) => {
-				if status != StatusCode::SWITCHING_PROTOCOLS {
-					None
-				} else {
-					Some(status)
-				}
-			},
-			_ => None,
+		let status = if response.subject != StatusCode::SWITCHING_PROTOCOLS {
+			None
+		} else {
+			Some(response.subject)
 		};
 
 		let status = match status {
@@ -910,6 +912,8 @@ impl<'u> ClientBuilder<'u> {
 			self.headers.get(SEC_WEBSOCKET_KEY)
 				.map(|key| WebSocketKey::from_str(key.to_str().unwrap()).unwrap())
 				.ok_or(WebSocketError::RequestError("Request Sec-WebSocket-Key was invalid"))?;
+
+		println!("{:?} : {}", response.headers, WebSocketAccept::new(key));
 
 		if response.headers.get(SEC_WEBSOCKET_ACCEPT) != Some(&(WebSocketAccept::new(key)).into()) {
 			return Err(WebSocketError::ResponseError("Sec-WebSocket-Accept is invalid"));
@@ -991,17 +995,17 @@ mod tests {
 		use super::*;
 		let builder = ClientBuilder::new("ws://127.0.0.1:8080/hello/world")
 			.unwrap()
-			.add_protocol("protobeard");
+			.add_protocols(vec!["protobeard"]);
 
 		let protos: WebSocketProtocol = builder.headers.get(SEC_WEBSOCKET_PROTOCOL).unwrap()
 			.to_str().unwrap()
 			.parse().unwrap();
+
 		assert!(protos.0.contains(&"protobeard".to_string()));
 		assert!(protos.0.len() == 1);
 
 		let builder = ClientBuilder::new("ws://example.org/hello")
 			.unwrap()
-			.add_protocol("rust-websocket")
 			.clear_protocols()
 			.add_protocols(vec!["electric", "boogaloo"]);
 

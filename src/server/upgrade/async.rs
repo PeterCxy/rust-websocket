@@ -5,7 +5,7 @@
 //! an intermediate struct called `Upgrade` and the `Upgrade` struct itself.
 //! The `Upgrade` struct is used to inspect details of the websocket connection
 //! (e.g. what protocols it wants to use) and decide whether to accept or reject it.
-use super::{HyperIntoWsError, WsUpgrade, Request, validate};
+use super::{HyperIntoWsError, WsUpgrade, validate};
 use std::io::{self, ErrorKind};
 use tokio_io::codec::{Framed, FramedParts};
 use http::header::HeaderMap;
@@ -14,7 +14,7 @@ use stream::async::Stream;
 use futures::{Sink, Future};
 use futures::Stream as StreamTrait;
 use futures::sink::Send;
-use codec::http::HttpServerCodec;
+use codec::http::{RequestHead, HttpServerCodec};
 use codec::ws::{MessageCodec, Context};
 use bytes::BytesMut;
 use client::async::ClientNew;
@@ -45,9 +45,9 @@ use ::codec::http::MessageHead;
 ///     .incoming().map_err(|e| e.into())
 ///     .and_then(|(stream, _)| stream.into_ws().map_err(|e| e.3))
 ///     .map(|upgrade| {
-///         if upgrade.protocols().iter().any(|p| p == "super-cool-proto") {
+///         if upgrade.protocols().iter().any(|p| *p == "super-cool-proto") {
 ///             let accepted = upgrade
-///                 .use_protocol("super-cool-proto")
+///                 .use_protocols(vec!["super-cool-proto"])
 ///                 .accept()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
@@ -172,9 +172,9 @@ impl<S> WsUpgrade<S, BytesMut>
 ///     .incoming().map_err(|e| e.into())
 ///     .and_then(|(stream, _)| stream.into_ws().map_err(|e| e.3))
 ///     .map(|upgrade| {
-///         if upgrade.protocols().iter().any(|p| p == "super-cool-proto") {
+///         if upgrade.protocols().iter().any(|p| *p == "super-cool-proto") {
 ///             let accepted = upgrade
-///                 .use_protocol("super-cool-proto")
+///                 .use_protocols(vec!["super-cool-proto"])
 ///                 .accept()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
@@ -206,7 +206,7 @@ impl<S> IntoWs for S
     where S: Stream + 'static
 {
 	type Stream = S;
-	type Error = (S, Option<Request>, BytesMut, HyperIntoWsError);
+	type Error = (S, Option<RequestHead>, BytesMut, HyperIntoWsError);
 
 	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error>> {
 		let future = self.framed(HttpServerCodec)

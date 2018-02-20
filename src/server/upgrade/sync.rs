@@ -2,9 +2,11 @@
 //! WebSocket client.
 use std::io::{self, BufRead};
 use std::net::TcpStream;
-use stream::sync::{Stream, AsTcpStream};
-use server::upgrade::{Request, WsUpgrade, HyperIntoWsError, validate};
+
 use client::sync::Client;
+use codec::http::{RequestHead, RequestLine};
+use server::upgrade::{WsUpgrade, HyperIntoWsError, validate};
+use stream::sync::{Stream, AsTcpStream};
 
 use std::io::BufReader;
 use http::{self, StatusCode};
@@ -33,7 +35,7 @@ pub struct Buffer {
 /// If you have your requests separate from your stream you can use this struct
 /// to upgrade the connection based on the request given
 /// (the request should be a handshake).
-pub struct RequestStreamPair<S: Stream>(pub S, pub Request);
+pub struct RequestStreamPair<S: Stream>(pub S, pub RequestHead);
 
 /// The synchronous specialization of `WsUpgrade`.
 /// See the `WsUpgrade` docs for usage and the extra synchronous methods
@@ -150,7 +152,7 @@ impl<S> IntoWs for S
     where S: Stream
 {
 	type Stream = S;
-	type Error = (S, Option<Request>, Option<Buffer>, HyperIntoWsError);
+	type Error = (S, Option<RequestHead>, Option<Buffer>, HyperIntoWsError);
 
 	fn into_ws(self) -> Result<Upgrade<Self::Stream>, Self::Error> {
 
@@ -183,13 +185,13 @@ impl<S> IntoWs for S
 			pos: pos,
 		});
 
-		let request = Request {
+		let request = RequestHead {
 			version: match parse.version {
 				Some(0) => http::Version::HTTP_10,
 				Some(1) => http::Version::HTTP_11,
 				Some(_) | None => return Err((stream, None, buffer, httparse::Error::Version.into())),
 			},
-			subject: (
+			subject: RequestLine(
 				match parse.method.unwrap().parse() {
 					Ok(method) => method,
 					Err(e) => return Err((stream, None, buffer, httparse::Error::HeaderValue.into())),
@@ -220,7 +222,7 @@ impl<S> IntoWs for RequestStreamPair<S>
     where S: Stream
 {
 	type Stream = S;
-	type Error = (S, Request, HyperIntoWsError);
+	type Error = (S, RequestHead, HyperIntoWsError);
 
 	fn into_ws(self) -> Result<Upgrade<Self::Stream>, Self::Error> {
 		match validate(&self.1.subject.0, &self.1.version, &self.1.headers) {
@@ -246,37 +248,37 @@ impl<S> IntoWs for RequestStreamPair<S>
 /// Using this method, one can start a hyper server and check if each request
 /// is a websocket upgrade request, if so you can use websockets and hyper on the
 /// same port!
-///
-/// ```rust,no_run
-/// # extern crate hyper;
-/// # extern crate websocket;
-/// # fn main() {
-/// use hyper::server::{Server, Request, Response};
-/// use websocket::Message;
-/// use websocket::sync::server::upgrade::IntoWs;
-/// use websocket::sync::server::upgrade::HyperRequest;
-///
-/// Server::http("0.0.0.0:80").unwrap().handle(move |req: Request, res: Response| {
-///     match HyperRequest(req).into_ws() {
-///         Ok(upgrade) => {
-///             // `accept` sends a successful handshake, no need to worry about res
-///             let mut client = match upgrade.accept() {
-///                 Ok(c) => c,
-///                 Err(_) => panic!(),
-///             };
-///
-///             client.send_message(&Message::text("its free real estate"));
-///         },
-///
-///         Err((request, err)) => {
-///             // continue using the request as normal, "echo uri"
-///             res.send(b"Try connecting over ws instead.").unwrap();
-///         },
-///     };
-/// })
-/// .unwrap();
-/// # }
-/// ```
+////
+//// ```rust,no_run
+//// # extern crate hyper;
+//// # extern crate websocket;
+//// # fn main() {
+//// use hyper::server::{Server, Request, Response};
+//// use websocket::Message;
+//// use websocket::sync::server::upgrade::IntoWs;
+//// use websocket::sync::server::upgrade::HyperRequest;
+////
+//// Server::http("0.0.0.0:80").unwrap().handle(move |req: Request, res: Response| {
+////     match HyperRequest(req).into_ws() {
+////         Ok(upgrade) => {
+////             // `accept` sends a successful handshake, no need to worry about res
+////             let mut client = match upgrade.accept() {
+////                 Ok(c) => c,
+////                 Err(_) => panic!(),
+////             };
+////
+////             client.send_message(&Message::text("its free real estate"));
+////         },
+////
+////         Err((request, err)) => {
+////             // continue using the request as normal, "echo uri"
+////             res.send(b"Try connecting over ws instead.").unwrap();
+////         },
+////     };
+//// })
+//// .unwrap();
+//// # }
+//// ```
 pub struct HyperRequest();//pub ::hyper::server::Request);
 
 /*impl IntoWs for HyperRequest {

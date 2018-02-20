@@ -17,8 +17,19 @@ use tokio_io::codec::{Decoder, Encoder};
 #[cfg(any(feature="sync", feature="async"))]
 use http::Version;
 
-const MAX_HEADERS: usize = 100;
+pub const MAX_HEADERS: usize = 100;
 pub type ParseRespose<T> = hyper::Result<Option<(MessageHead<T>, usize)>>;
+
+/// An incoming request message.
+pub type RequestHead = MessageHead<RequestLine>;
+
+#[derive(Debug, Default, PartialEq)]
+pub struct RequestLine(pub Method, pub Uri);
+
+/// An incoming response message.
+pub type ResponseHead = MessageHead<StatusCode>;
+
+#[derive(Debug)]
 pub struct MessageHead<T> {
 	pub version: Version,
 	pub subject: T,
@@ -26,14 +37,12 @@ pub struct MessageHead<T> {
 }
 
 #[derive(Clone, Copy)]
-struct HeaderIndices {
-    name: (usize, usize),
-    value: (usize, usize),
+pub struct HeaderIndices {
+    pub name: (usize, usize),
+    pub value: (usize, usize),
 }
 
-pub struct RawStatus(pub u16, pub Cow<'static, str>);
-
-fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices: &mut [HeaderIndices]) {
+pub fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices: &mut [HeaderIndices]) {
     let bytes_ptr = bytes.as_ptr() as usize;
     for (header, indices) in headers.iter().zip(indices.iter_mut()) {
         let name_start = header.name.as_ptr() as usize - bytes_ptr;
@@ -45,13 +54,13 @@ fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices: &m
     }
 }
 
-struct HeadersAsBytesIter<'a> {
-    headers: ::std::slice::Iter<'a, HeaderIndices>,
-    slice: Bytes,
+pub struct HeadersAsBytesIter<'a> {
+    pub headers: ::std::slice::Iter<'a, HeaderIndices>,
+    pub slice: Bytes,
 }
 
 impl<'a> Iterator for HeadersAsBytesIter<'a> {
-    type Item = (&'a str, Bytes);
+    type Item = (HeaderName, HeaderValue);
     fn next(&mut self) -> Option<Self::Item> {
         self.headers.next().map(|header| {
             let name = unsafe {
@@ -61,7 +70,14 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
                 );
                 ::std::str::from_utf8_unchecked(bytes)
             };
-            (name, self.slice.slice(header.value.0, header.value.1))
+            let name = HeaderName::from_bytes(name.as_bytes())
+                .expect("header name already validated");
+            let value = unsafe {
+                HeaderValue::from_shared_unchecked(
+                    self.slice.slice(header.value.0, header.value.1)
+                )
+            };
+            (name, value)
         })
     }
 }
@@ -76,17 +92,16 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
 ///# extern crate tokio_core;
 ///# extern crate tokio_io;
 ///# extern crate websocket;
+///# extern crate http;
 ///# extern crate hyper;
 ///use websocket::async::HttpClientCodec;
+///use websocket::codec::http::MessageHead;
 ///# use websocket::async::futures::{Future, Sink, Stream};
 ///# use tokio_core::net::TcpStream;
 ///# use tokio_core::reactor::Core;
 ///# use tokio_io::AsyncRead;
-///# use hyper::http::h1::Incoming;
-///# use hyper::version::HttpVersion;
-///# use hyper::header::Headers;
-///# use hyper::method::Method;
-///# use hyper::uri::Uri;
+///# use http::{Method, Uri, Version};
+///# use http::header::HeaderMap;
 ///
 ///# fn main() {
 ///let mut core = Core::new().unwrap();
@@ -97,10 +112,10 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
 ///        Ok(s.framed(HttpClientCodec))
 ///    })
 ///    .and_then(|s| {
-///        s.send(Incoming {
-///            version: HttpVersion::Http11,
-///            subject: (Method::Get, Uri::AbsolutePath("/".to_string())),
-///            headers: Headers::new(),
+///        s.send(MessageHead {
+///            version: Version::HTTP_11,
+///            subject: (Method::GET, "/".parse().unwrap()),
+///            headers: HeaderMap::new(),
 ///        })
 ///    })
 ///    .map_err(|e| e.into())
@@ -139,7 +154,7 @@ impl Encoder for HttpClientCodec {
 }
 
 impl Decoder for HttpClientCodec {
-	type Item = MessageHead<RawStatus>;
+	type Item = ResponseHead;
 	type Error = HttpCodecError;
 
 	fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -188,17 +203,11 @@ impl Decoder for HttpClientCodec {
 			headers: headers_indices[..headers_len].iter(),
 			slice: slice,
 		};
-		let new_headers = new_headers.map(|h| {
-		    (
-			h.0.parse::<HeaderName>().unwrap(),
-			HeaderValue::from_bytes(h.1.as_ref()).unwrap()
-		    )
-		});
 		headers.extend(new_headers);
 
 		Ok(Some(MessageHead {
 			version: version,
-			subject: RawStatus(code, reason),
+			subject: StatusCode::from_u16(code).unwrap(),
 			headers: headers,
 		}))
 	}
@@ -218,19 +227,17 @@ impl Decoder for HttpClientCodec {
 ///# extern crate tokio_core;
 ///# extern crate tokio_io;
 ///# extern crate websocket;
+///# extern crate http;
 ///# extern crate hyper;
 ///# use std::io;
 ///use websocket::async::HttpServerCodec;
+///# use websocket::codec::http::MessageHead;
 ///# use websocket::async::futures::{Future, Sink, Stream};
 ///# use tokio_core::net::TcpStream;
 ///# use tokio_core::reactor::Core;
 ///# use tokio_io::AsyncRead;
-///# use hyper::http::h1::Incoming;
-///# use hyper::version::HttpVersion;
-///# use hyper::header::Headers;
-///# use hyper::method::Method;
-///# use hyper::uri::Uri;
-///# use hyper::status::StatusCode;
+///# use http::header::HeaderMap;
+///# use http::{Method, StatusCode, Uri, Version};
 ///# fn main() {
 ///
 ///let mut core = Core::new().unwrap();
@@ -241,15 +248,15 @@ impl Decoder for HttpClientCodec {
 ///   .map_err(|e| e.into())
 ///   .and_then(|s| s.into_future().map_err(|(e, _)| e))
 ///   .and_then(|(m, s)| match m {
-///       Some(ref m) if m.subject.0 == Method::Get => Ok(s),
+///       Some(ref m) if m.subject.0 == Method::GET => Ok(s),
 ///       _ => panic!(),
 ///   })
 ///   .and_then(|stream| {
 ///       stream
-///          .send(Incoming {
-///               version: HttpVersion::Http11,
-///               subject: StatusCode::NotFound,
-///               headers: Headers::new(),
+///          .send(MessageHead {
+///               version: Version::HTTP_11,
+///               subject: StatusCode::NOT_FOUND,
+///               headers: HeaderMap::new(),
 ///           })
 ///           .map_err(|e| e.into())
 ///   });
@@ -276,7 +283,7 @@ impl Encoder for HttpServerCodec {
 }
 
 impl Decoder for HttpServerCodec {
-	type Item = MessageHead<(Method, Uri)>;
+	type Item = MessageHead<RequestLine>;
 	type Error = HttpCodecError;
 
 	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -284,7 +291,7 @@ impl Decoder for HttpServerCodec {
 		// TODO: this is ineffecient, but hyper does not give us a better way to parse
 		match split_off_http(src) {
 			Some(buf) => {
-				let mut reader = BufReader::with_capacity(buf.len(), &*buf as &[u8]);
+				let reader = BufReader::with_capacity(buf.len(), &*buf as &[u8]);
 
 				let mut req = Request::new(&mut []);
 				req.parse(&buf);
@@ -295,7 +302,7 @@ impl Decoder for HttpServerCodec {
 						Some(1) => Version::HTTP_11,
 						None | Some(_) => return Ok(None),
 					},
-					subject: (
+					subject: RequestLine (
 						match req.method.unwrap().parse() {
 							Ok(method) => method,
 							Err(_) => return Ok(None),
@@ -387,7 +394,7 @@ mod tests {
 			.map_err(|e| e.into())
 			.and_then(|s| s.into_future().map_err(|(e, _)| e))
 			.and_then(|(m, _)| match m {
-			              Some(ref m) if StatusCode::from_u16(m.subject.0).unwrap() ==
+			              Some(ref m) if m.subject ==
 			                             StatusCode::NOT_FOUND => Ok(()),
 			              _ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
 			          });

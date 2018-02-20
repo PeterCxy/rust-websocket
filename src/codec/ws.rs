@@ -159,22 +159,20 @@ impl<D> Encoder for DataFrameCodec<D>
 ///# extern crate tokio_core;
 ///# extern crate tokio_io;
 ///# extern crate websocket;
+///# extern crate http;
 ///# extern crate hyper;
 ///# use std::io::{self, Cursor};
 ///use websocket::async::{MessageCodec, MsgCodecCtx};
 ///# use websocket::{Message, OwnedMessage};
+///# use websocket::codec::http::MessageHead;
 ///# use websocket::ws::Message as MessageTrait;
 ///# use websocket::stream::ReadWritePair;
 ///# use websocket::async::futures::{Future, Sink, Stream};
 ///# use tokio_core::net::TcpStream;
 ///# use tokio_core::reactor::Core;
 ///# use tokio_io::AsyncRead;
-///# use hyper::http::h1::Incoming;
-///# use hyper::version::HttpVersion;
-///# use hyper::header::Headers;
-///# use hyper::method::Method;
-///# use hyper::uri::RequestUri;
-///# use hyper::status::StatusCode;
+///# use http::header::HeaderMap;
+///# use http::{Version, StatusCode, Method, Uri};
 ///# fn main() {
 ///
 ///let mut core = Core::new().unwrap();

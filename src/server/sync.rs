@@ -2,11 +2,14 @@
 use std::net::{SocketAddr, ToSocketAddrs, TcpListener, TcpStream};
 use std::io;
 use std::convert::Into;
+
 #[cfg(feature="sync-ssl")]
 use native_tls::{TlsStream, TlsAcceptor};
+
+use codec::http::RequestHead;
 use server::{WsServer, OptionalTlsAcceptor, NoTlsAcceptor, InvalidConnection};
 use server::upgrade::sync::{Upgrade, IntoWs, Buffer};
-pub use server::upgrade::{Request, HyperIntoWsError};
+pub use server::upgrade::HyperIntoWsError;
 
 #[cfg(feature="async")]
 use tokio_core::reactor::Handle;

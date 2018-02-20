@@ -2,8 +2,9 @@
 #[cfg(any(feature="sync-ssl", feature="async-ssl"))]
 use native_tls::TlsAcceptor;
 
+use codec::http::RequestHead;
 use stream::Stream;
-use self::upgrade::{Request, HyperIntoWsError};
+use self::upgrade::HyperIntoWsError;
 
 pub mod upgrade;
 
@@ -40,7 +41,7 @@ pub struct InvalidConnection<S, B>
 	/// simply run this server and handle both HTTP and Websocket connections.
 	/// If you already have a server you want to use, checkout the
 	/// `server::upgrade` module to integrate this crate with your server.
-	pub parsed: Option<Request>,
+	pub parsed: Option<RequestHead>,
 	/// the buffered data that was already taken from the stream
 	pub buffer: Option<B>,
 	/// the cause of the failed websocket connection setup

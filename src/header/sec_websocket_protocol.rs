@@ -22,14 +22,14 @@ impl FromStr for WebSocketProtocol {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		Ok(WebSocketProtocol(s.split(',')
-			.map(|s| s.to_owned())
+			.map(|s| s.trim().to_owned())
 			.collect()))
 	}
 }
 
 impl From<WebSocketProtocol> for HeaderValue {
 	fn from(protocol: WebSocketProtocol) -> Self {
-		HeaderValue::from_str(&format!("{}", protocol)).unwrap()
+		HeaderValue::from_str(&protocol.0.join(", ")).unwrap()
 	}
 }
 

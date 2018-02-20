@@ -4,6 +4,9 @@
 use std::fmt;
 use std::str::FromStr;
 use std::ops::Deref;
+
+use http::header::HeaderValue;
+
 use result::{WebSocketResult, WebSocketError};
 
 const INVALID_EXTENSION: &'static str = "Invalid Sec-WebSocket-Extensions extension name";
@@ -19,6 +22,30 @@ impl Deref for WebSocketExtensions {
 
 	fn deref(&self) -> &Vec<Extension> {
 		&self.0
+	}
+}
+
+impl FromStr for WebSocketExtensions {
+	type Err = ();
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(
+			WebSocketExtensions(
+				s.split(',')
+					.map(|s| s.trim().parse::<Extension>().unwrap())
+					.collect()
+			)
+		)
+	}
+}
+
+impl From<WebSocketExtensions> for HeaderValue {
+	fn from(extensions: WebSocketExtensions) -> Self {
+		HeaderValue::from_str(
+			&extensions.0.iter()
+				.map(|e| format!("{}", e))
+				.collect::<Vec<String>>()
+				.join(", ")
+		).unwrap()
 	}
 }
 

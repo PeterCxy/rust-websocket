@@ -46,7 +46,7 @@ fn main() {
 
 	let runner = ClientBuilder::new(CONNECTION)
 		.unwrap()
-		.add_protocol("rust-websocket")
+		.add_protocols(vec!["rust-websocket"])
 		.async_connect_insecure(&core.handle())
 		.and_then(|(duplex, _)| {
 			let (sink, stream) = duplex.split();
