@@ -101,7 +101,7 @@ impl<S, B> WsUpgrade<S, B>
 					})
 					.collect::<Vec<&str>>()
 			})
-		    .unwrap_or(vec![])
+			.unwrap_or(vec![])
 	}
 
 	/// A list of extensions requested from the client.
@@ -282,7 +282,8 @@ pub fn validate(
 	}
 
 	if let Some(version) = headers.get(SEC_WEBSOCKET_VERSION)
-	    .map(|v| v.to_str().unwrap().parse::<WebSocketVersion>().unwrap()) {
+		.map(|v| v.to_str().unwrap().parse::<WebSocketVersion>().unwrap()
+	) {
 		if version != WebSocketVersion::WebSocket13 {
 			return Err(HyperIntoWsError::UnsupportedWebsocketVersion);
 		}

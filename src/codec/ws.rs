@@ -213,7 +213,7 @@ impl MessageCodec<OwnedMessage> {
 }
 
 impl<M> MessageCodec<M>
-    where M: MessageTrait
+	where M: MessageTrait
 {
 	/// Creates a codec that can encode a custom implementation of a websocket
 	/// message.
@@ -230,7 +230,7 @@ impl<M> MessageCodec<M>
 }
 
 impl<M> Decoder for MessageCodec<M>
-    where M: MessageTrait
+	where M: MessageTrait
 {
 	type Item = OwnedMessage;
 	type Error = WebSocketError;
@@ -270,7 +270,7 @@ impl<M> Decoder for MessageCodec<M>
 }
 
 impl<M> Encoder for MessageCodec<M>
-    where M: MessageTrait
+	where M: MessageTrait
 {
 	type Item = M;
 	type Error = WebSocketError;
@@ -308,9 +308,9 @@ mod tests {
 			OwnedMessage::Pong("boop".to_string().into_bytes()),
 			OwnedMessage::Close(None),
 			OwnedMessage::Close(Some(CloseData {
-			                             status_code: 64,
-			                             reason: "because".to_string(),
-			                         })),
+				status_code: 64,
+				reason: "because".to_string(),
+			})),
 		];
 
 		for message in messages.into_iter() {
@@ -364,9 +364,9 @@ mod tests {
 			.into_future()
 			.map_err(|e| e.0)
 			.map(|(m, s)| {
-				     assert_eq!(m, Some(OwnedMessage::Text("50 schmeckels".to_string())));
-				     s
-				    })
+				assert_eq!(m, Some(OwnedMessage::Text("50 schmeckels".to_string())));
+				s
+			})
 			.and_then(|s| s.send(Message::text("ethan bradberry")))
 			.and_then(|s| {
 				let mut stream = s.into_parts().inner;
@@ -377,8 +377,8 @@ mod tests {
 					.into_future()
 					.map_err(|e| e.0)
 					.map(|(message, _)| {
-						     assert_eq!(message, Some(Message::text("ethan bradberry").into()))
-						    })
+						assert_eq!(message, Some(Message::text("ethan bradberry").into()))
+					})
 			});
 
 		core.run(f).unwrap();
@@ -395,15 +395,15 @@ mod tests {
 			.into_future()
 			.map_err(|e| e.0)
 			.map(|(m, s)| {
-				     assert_eq!(m, Some(OwnedMessage::Text("50 schmeckels".to_string())));
-				     s
-				    })
+				assert_eq!(m, Some(OwnedMessage::Text("50 schmeckels".to_string())));
+				s
+			})
 			.and_then(|s| s.send(Message::text("ethan bradberry")))
 			.map(|s| {
-				     let mut written = vec![];
-				     Message::text("ethan bradberry").serialize(&mut written, false).unwrap();
-				     assert_eq!(written, s.into_parts().inner.1.into_inner());
-				    });
+				let mut written = vec![];
+				Message::text("ethan bradberry").serialize(&mut written, false).unwrap();
+				assert_eq!(written, s.into_parts().inner.1.into_inner());
+			});
 
 		core.run(f).unwrap();
 	}

@@ -81,7 +81,7 @@ impl Client<TcpStream> {
 }
 
 impl<S> Client<S>
-    where S: AsTcpStream + Stream
+	where S: AsTcpStream + Stream
 {
 	/// Shuts down the client connection, will cause all pending and future IO to
 	/// return immediately with an appropriate value.
@@ -199,8 +199,8 @@ impl<S> Client<S>
 	/// ```
 	pub fn protocols<'a>(&'a self) -> Vec<&str> {
 		self.headers
-		    .get(SEC_WEBSOCKET_PROTOCOL)
-		    .map(|e| {
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.map(|e| {
 				str::from_utf8(e.as_bytes()).unwrap()
 					.split(',')
 					.filter_map(|x| match x.trim() {
@@ -389,13 +389,17 @@ impl<S> Client<S>
 		 -> IoResult<(Reader<<S as Splittable>::Reader>, Writer<<S as Splittable>::Writer>)> {
 		let stream = self.stream.into_inner();
 		let (read, write) = stream.split()?;
-		Ok((Reader {
-		        stream: BufReader::new(read),
-		        receiver: self.receiver,
-		    },
-		    Writer {
-		        stream: write,
-		        sender: self.sender,
-		    }))
+		Ok(
+			(
+				Reader {
+					stream: BufReader::new(read),
+					receiver: self.receiver,
+				},
+				Writer {
+					stream: write,
+					sender: self.sender,
+				}
+			)
+		)
 	}
 }

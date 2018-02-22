@@ -45,7 +45,7 @@ pub type Upgrade<S> = WsUpgrade<S, Option<Buffer>>;
 /// These methods are the synchronous ways of accepting and rejecting a websocket
 /// handshake.
 impl<S> WsUpgrade<S, Option<Buffer>>
-    where S: Stream
+	where S: Stream
 {
 	/// Accept the handshake request and send a response,
 	/// if nothing goes wrong a client will be created.
@@ -93,7 +93,7 @@ impl<S> WsUpgrade<S, Option<Buffer>>
 }
 
 impl<S, B> WsUpgrade<S, B>
-    where S: Stream + AsTcpStream
+	where S: Stream + AsTcpStream
 {
 	/// Get a handle to the underlying TCP stream, useful to be able to set
 	/// TCP options, etc.
@@ -228,11 +228,11 @@ impl<S> IntoWs for RequestStreamPair<S>
 		match validate(&self.1.subject.0, &self.1.version, &self.1.headers) {
 			Ok(_) => {
 				Ok(WsUpgrade {
-				       headers: HeaderMap::new(),
-				       stream: self.0,
-				       request: self.1,
-				       buffer: None,
-				   })
+					headers: HeaderMap::new(),
+					stream: self.0,
+					request: self.1,
+					buffer: None,
+				})
 			}
 			Err(e) => Err((self.0, self.1, e)),
 		}
@@ -294,14 +294,14 @@ pub struct HyperRequest();//pub ::hyper::server::Request);
 			self.0.deconstruct();
 
 		Ok(Upgrade {
-		       headers: Headers::new(),
-		       stream: body,
-		       buffer: None,
-		       request: ::codec::http::MessageHead {
-		           version: version,
-		           headers: headers,
-		           subject: (method, uri),
-		       },
-		   })
+			headers: Headers::new(),
+			stream: body,
+			buffer: None,
+			request: ::codec::http::MessageHead {
+				version: version,
+				headers: headers,
+				subject: (method, uri),
+			},
+		})
 	}
 }*/

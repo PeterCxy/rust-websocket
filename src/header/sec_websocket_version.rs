@@ -67,16 +67,16 @@ mod tests {
 	fn bench_header_version_parse(b: &mut test::Bencher) {
 		let value = vec![b"13".to_vec()];
 		b.iter(|| {
-			       let mut version: WebSocketVersion = Header::parse_header(&value[..]).unwrap();
-			       test::black_box(&mut version);
-			      });
+			let mut version: WebSocketVersion = Header::parse_header(&value[..]).unwrap();
+			test::black_box(&mut version);
+		});
 	}
 	#[bench]
 	fn bench_header_version_format(b: &mut test::Bencher) {
 		let value = vec![b"13".to_vec()];
 		let val: WebSocketVersion = Header::parse_header(&value[..]).unwrap();
 		b.iter(|| {
-			       format!("{}", val);
-			      });
+			format!("{}", val);
+		});
 	}
 }

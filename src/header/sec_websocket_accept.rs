@@ -97,31 +97,30 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(accept);
 
-		assert_eq!(&headers.to_string()[..],
-		           "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n");
+		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n");
 	}
 	#[bench]
 	fn bench_header_accept_new(b: &mut test::Bencher) {
 		let key = WebSocketKey::new();
 		b.iter(|| {
-			       let mut accept = WebSocketAccept::new(&key);
-			       test::black_box(&mut accept);
-			      });
+			let mut accept = WebSocketAccept::new(&key);
+			test::black_box(&mut accept);
+		});
 	}
 	#[bench]
 	fn bench_header_accept_parse(b: &mut test::Bencher) {
 		let value = vec![b"s3pPLMBiTxaQ9kYGzzhZRbK+xOo=".to_vec()];
 		b.iter(|| {
-			       let mut accept: WebSocketAccept = Header::parse_header(&value[..]).unwrap();
-			       test::black_box(&mut accept);
-			      });
+			let mut accept: WebSocketAccept = Header::parse_header(&value[..]).unwrap();
+			test::black_box(&mut accept);
+		});
 	}
 	#[bench]
 	fn bench_header_accept_format(b: &mut test::Bencher) {
 		let value = vec![b"s3pPLMBiTxaQ9kYGzzhZRbK+xOo=".to_vec()];
 		let val: WebSocketAccept = Header::parse_header(&value[..]).unwrap();
 		b.iter(|| {
-			       format!("{}", val.serialize());
-			      });
+			format!("{}", val.serialize());
+		});
 	}
 }

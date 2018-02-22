@@ -38,20 +38,20 @@ pub struct MessageHead<T> {
 
 #[derive(Clone, Copy)]
 pub struct HeaderIndices {
-    pub name: (usize, usize),
-    pub value: (usize, usize),
+	pub name: (usize, usize),
+	pub value: (usize, usize),
 }
 
 pub fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices: &mut [HeaderIndices]) {
-    let bytes_ptr = bytes.as_ptr() as usize;
-    for (header, indices) in headers.iter().zip(indices.iter_mut()) {
-        let name_start = header.name.as_ptr() as usize - bytes_ptr;
-        let name_end = name_start + header.name.len();
-        indices.name = (name_start, name_end);
-        let value_start = header.value.as_ptr() as usize - bytes_ptr;
-        let value_end = value_start + header.value.len();
-        indices.value = (value_start, value_end);
-    }
+	let bytes_ptr = bytes.as_ptr() as usize;
+	for (header, indices) in headers.iter().zip(indices.iter_mut()) {
+		let name_start = header.name.as_ptr() as usize - bytes_ptr;
+		let name_end = name_start + header.name.len();
+		indices.name = (name_start, name_end);
+		let value_start = header.value.as_ptr() as usize - bytes_ptr;
+		let value_end = value_start + header.value.len();
+		indices.value = (value_start, value_end);
+	}
 }
 
 pub struct HeadersAsBytesIter<'a> {
@@ -60,26 +60,26 @@ pub struct HeadersAsBytesIter<'a> {
 }
 
 impl<'a> Iterator for HeadersAsBytesIter<'a> {
-    type Item = (HeaderName, HeaderValue);
-    fn next(&mut self) -> Option<Self::Item> {
-        self.headers.next().map(|header| {
-            let name = unsafe {
-                let bytes = ::std::slice::from_raw_parts(
-                    self.slice.as_ref().as_ptr().offset(header.name.0 as isize),
-                    header.name.1 - header.name.0
-                );
-                ::std::str::from_utf8_unchecked(bytes)
-            };
-            let name = HeaderName::from_bytes(name.as_bytes())
-                .expect("header name already validated");
-            let value = unsafe {
-                HeaderValue::from_shared_unchecked(
-                    self.slice.slice(header.value.0, header.value.1)
-                )
-            };
-            (name, value)
-        })
-    }
+	type Item = (HeaderName, HeaderValue);
+	fn next(&mut self) -> Option<Self::Item> {
+		self.headers.next().map(|header| {
+			let name = unsafe {
+				let bytes = ::std::slice::from_raw_parts(
+					self.slice.as_ref().as_ptr().offset(header.name.0 as isize),
+					header.name.1 - header.name.0
+				);
+				::std::str::from_utf8_unchecked(bytes)
+			};
+			let name = HeaderName::from_bytes(name.as_bytes())
+				.expect("header name already validated");
+			let value = unsafe {
+				HeaderValue::from_shared_unchecked(
+					self.slice.slice(header.value.0, header.value.1)
+				)
+			};
+			(name, value)
+		})
+	}
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -141,10 +141,10 @@ impl Encoder for HttpClientCodec {
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
 		// TODO: optomize this!
 		let request = format!("{} {} {:?}\r\n{:?}\r\n",
-		                      item.subject.0,
-		                      item.subject.1,
-		                      item.version,
-		                      item.headers);
+			item.subject.0,
+			item.subject.1,
+			item.version,
+			item.headers);
 		let byte_len = request.as_bytes().len();
 		if byte_len > dst.remaining_mut() {
 			dst.reserve(byte_len);
@@ -253,7 +253,7 @@ impl Decoder for HttpClientCodec {
 ///   })
 ///   .and_then(|stream| {
 ///       stream
-///          .send(MessageHead {
+///           .send(MessageHead {
 ///               version: Version::HTTP_11,
 ///               subject: StatusCode::NOT_FOUND,
 ///               headers: HeaderMap::new(),
@@ -387,17 +387,16 @@ mod tests {
 		let f = ReadWritePair(input, output)
 			.framed(HttpClientCodec)
 			.send(MessageHead {
-			          version: Version::HTTP_11,
-			          subject: (Method::GET, "/".to_string().parse().unwrap()),
-			          headers: HeaderMap::new(),
-			      })
+				version: Version::HTTP_11,
+				subject: (Method::GET, "/".to_string().parse().unwrap()),
+				headers: HeaderMap::new(),
+			})
 			.map_err(|e| e.into())
 			.and_then(|s| s.into_future().map_err(|(e, _)| e))
 			.and_then(|(m, _)| match m {
-			              Some(ref m) if m.subject ==
-			                             StatusCode::NOT_FOUND => Ok(()),
-			              _ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
-			          });
+				Some(ref m) if m.subject == StatusCode::NOT_FOUND => Ok(()),
+				_ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
+			});
 		core.run(f).unwrap();
 	}
 
@@ -405,10 +404,10 @@ mod tests {
 	fn test_server_http_codec() {
 		let mut core = Core::new().unwrap();
 		let request = "\
-		    GET / HTTP/1.0\r\n\
-		    Host: www.rust-lang.org\r\n\
-		    \r\n\
-		    "
+			GET / HTTP/1.0\r\n\
+			Host: www.rust-lang.org\r\n\
+			\r\n\
+			"
 			.as_bytes();
 		let input = Cursor::new(request);
 		let output = Cursor::new(Vec::new());
@@ -418,17 +417,17 @@ mod tests {
 			.into_future()
 			.map_err(|(e, _)| e)
 			.and_then(|(m, s)| match m {
-			              Some(ref m) if m.subject.0 == Method::GET => Ok(s),
-			              _ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
-			          })
+				Some(ref m) if m.subject.0 == Method::GET => Ok(s),
+				_ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
+			})
 			.and_then(|s| {
-				          s.send(MessageHead {
-				                     version: Version::HTTP_11,
-				                     subject: StatusCode::NOT_FOUND,
-				                     headers: HeaderMap::new(),
-				                 })
-				           .map_err(|e| e.into())
-				         });
+				s.send(MessageHead {
+					version: Version::HTTP_11,
+					subject: StatusCode::NOT_FOUND,
+					headers: HeaderMap::new(),
+				})
+				.map_err(|e| e.into())
+			});
 		core.run(f).unwrap();
 	}
 }

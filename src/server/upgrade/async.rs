@@ -86,24 +86,26 @@ impl<S> WsUpgrade<S, BytesMut>
 		let status = self.prepare_headers(custom_headers);
 		let WsUpgrade { headers, stream, request, buffer } = self;
 
-		let duplex = Framed::from_parts(FramedParts {
-		                                    inner: stream,
-		                                    readbuf: buffer,
-		                                    writebuf: BytesMut::with_capacity(0),
-		                                },
-		                                HttpServerCodec);
+		let duplex = Framed::from_parts(
+			FramedParts {
+				inner: stream,
+				readbuf: buffer,
+				writebuf: BytesMut::with_capacity(0),
+			},
+			HttpServerCodec);
 
-		let future = duplex.send(MessageHead {
-		                             version: request.version,
-		                             subject: status,
-		                             headers: headers.clone(),
-		                         })
-		                   .map(move |s| {
-			                        let codec = MessageCodec::default(Context::Server);
-			                        let client = Framed::from_parts(s.into_parts(), codec);
-			                        (client, headers)
-			                       })
-		                   .map_err(|e| e.into());
+		let future = duplex
+			.send(MessageHead {
+					version: request.version,
+					subject: status,
+					headers: headers.clone(),
+			})
+			.map(move |s| {
+				let codec = MessageCodec::default(Context::Server);
+				let client = Framed::from_parts(s.into_parts(), codec);
+				(client, headers)
+			})
+			.map_err(|e| e.into());
 		Box::new(future)
 	}
 
@@ -126,17 +128,18 @@ impl<S> WsUpgrade<S, BytesMut>
 		if let Some(custom) = headers {
 			self.headers.extend(custom.into_iter());
 		}
-		let duplex = Framed::from_parts(FramedParts {
-		                                    inner: self.stream,
-		                                    readbuf: self.buffer,
-		                                    writebuf: BytesMut::with_capacity(0),
-		                                },
-		                                HttpServerCodec);
+		let duplex = Framed::from_parts(
+			FramedParts {
+				inner: self.stream,
+				readbuf: self.buffer,
+				writebuf: BytesMut::with_capacity(0),
+			},
+			HttpServerCodec);
 		duplex.send(MessageHead {
-		                version: self.request.version,
-		                subject: StatusCode::BAD_REQUEST,
-		                headers: self.headers,
-		            })
+			version: self.request.version,
+			subject: StatusCode::BAD_REQUEST,
+			headers: self.headers,
+		})
 	}
 }
 
@@ -210,33 +213,32 @@ impl<S> IntoWs for S
 
 	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error>> {
 		let future = self.framed(HttpServerCodec)
-          .into_future()
-          .map_err(|(e, s)| {
-              let FramedParts { inner, readbuf, .. } = s.into_parts();
-              (inner, None, readbuf, e.into())
-          })
-          .and_then(|(m, s)| {
-              let FramedParts { inner, readbuf, .. } = s.into_parts();
-              if let Some(msg) = m {
-                  match validate(&msg.subject.0, &msg.version, &msg.headers) {
-                      Ok(()) => Ok((msg, inner, readbuf)),
-                      Err(e) => Err((inner, None, readbuf, e)),
-                  }
-              } else {
-                  let err = HyperIntoWsError::Io(io::Error::new(
-                      ErrorKind::ConnectionReset,
-                  "Connection dropped before handshake could be read"));
-                  Err((inner, None, readbuf, err))
-              }
-          })
-          .map(|(m, stream, buffer)| {
-              WsUpgrade {
-                  headers: HeaderMap::new(),
-                  stream: stream,
-                  request: m,
-                  buffer: buffer,
-              }
-          });
+			.into_future()
+			.map_err(|(e, s)| {
+				let FramedParts { inner, readbuf, .. } = s.into_parts();
+				(inner, None, readbuf, e.into())
+			})
+			.and_then(|(m, s)| {
+				let FramedParts { inner, readbuf, .. } = s.into_parts();
+				if let Some(msg) = m {
+					match validate(&msg.subject.0, &msg.version, &msg.headers) {
+						Ok(()) => Ok((msg, inner, readbuf)),
+						Err(e) => Err((inner, None, readbuf, e)),
+					}
+				} else {
+					let err = HyperIntoWsError::Io(io::Error::new(ErrorKind::ConnectionReset,
+					"Connection dropped before handshake could be read"));
+					Err((inner, None, readbuf, err))
+				}
+			})
+			.map(|(m, stream, buffer)| {
+				WsUpgrade {
+					headers: HeaderMap::new(),
+					stream: stream,
+					request: m,
+					buffer: buffer,
+				}
+			});
 		Box::new(future)
 	}
 }

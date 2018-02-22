@@ -52,23 +52,22 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(protocol);
 
-		assert_eq!(&headers.to_string()[..],
-		           "Sec-WebSocket-Protocol: foo, bar\r\n");
+		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Protocol: foo, bar\r\n");
 	}
 	#[bench]
 	fn bench_header_protocol_parse(b: &mut test::Bencher) {
 		let value = vec![b"foo, bar".to_vec()];
 		b.iter(|| {
-			       let mut protocol: WebSocketProtocol = Header::parse_header(&value[..]).unwrap();
-			       test::black_box(&mut protocol);
-			      });
+			let mut protocol: WebSocketProtocol = Header::parse_header(&value[..]).unwrap();
+			test::black_box(&mut protocol);
+		});
 	}
 	#[bench]
 	fn bench_header_protocol_format(b: &mut test::Bencher) {
 		let value = vec![b"foo, bar".to_vec()];
 		let val: WebSocketProtocol = Header::parse_header(&value[..]).unwrap();
 		b.iter(|| {
-			       format!("{}", val);
-			      });
+			format!("{}", val);
+		});
 	}
 }
