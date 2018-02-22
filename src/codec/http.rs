@@ -268,7 +268,7 @@ impl Decoder for HttpClientCodec {
 pub struct HttpServerCodec;
 
 impl Encoder for HttpServerCodec {
-	type Item = MessageHead<StatusCode>;
+	type Item = ResponseHead;
 	type Error = io::Error;
 
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
@@ -283,7 +283,7 @@ impl Encoder for HttpServerCodec {
 }
 
 impl Decoder for HttpServerCodec {
-	type Item = MessageHead<RequestLine>;
+	type Item = RequestHead;
 	type Error = HttpCodecError;
 
 	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
