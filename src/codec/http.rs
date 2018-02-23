@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fmt::{self, Formatter, Display};
 
 use bytes::{BufMut, BytesMut, Bytes};
-use http::{Method, StatusCode, Uri};
+use http::{self, Method, StatusCode, Uri};
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 use httparse::{self, Request};
 use hyper;
@@ -132,6 +132,15 @@ fn split_off_http(src: &mut BytesMut) -> Option<BytesMut> {
 		Some(p) => Some(src.split_to(p + 4)),
 		None => None,
 	}
+}
+
+fn write_headers(headers: &HeaderMap, dst: &mut BytesMut) {
+    for (name, value) in headers {
+        dst.extend(name.as_str().as_bytes());
+        dst.extend(b": ");
+        dst.extend(value.as_bytes());
+        dst.extend(b"\r\n");
+    }
 }
 
 impl Encoder for HttpClientCodec {
@@ -272,13 +281,10 @@ impl Encoder for HttpServerCodec {
 	type Error = io::Error;
 
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-		// TODO: optomize this!
-		let response = format!("{:?} {}\r\n{:?}\r\n", item.version, item.subject, item.headers);
-		let byte_len = response.as_bytes().len();
-		if byte_len > dst.remaining_mut() {
-			dst.reserve(byte_len);
-		}
-		dst.writer().write(response.as_bytes()).map(|_| ())
+		dst.extend(format!("{:?} {}\r\n", item.version, item.subject).as_bytes());
+		write_headers(&item.headers, dst);
+		dst.extend(b"\r\n");
+		Ok(())
 	}
 }
 
@@ -290,30 +296,67 @@ impl Decoder for HttpServerCodec {
 		// check if we get a request from hyper
 		// TODO: this is ineffecient, but hyper does not give us a better way to parse
 		match split_off_http(src) {
-			Some(buf) => {
-				let reader = BufReader::with_capacity(buf.len(), &*buf as &[u8]);
+			Some(mut buf) => {
 
-				let mut req = Request::new(&mut []);
-				req.parse(&buf);
+				if buf.len() == 0 {
+					return Ok(None);
+				}
 
-				Ok(Some(MessageHead {
-					version: match req.version {
-						Some(0) => Version::HTTP_10,
-						Some(1) => Version::HTTP_11,
-						None | Some(_) => return Ok(None),
-					},
-					subject: RequestLine (
-						match req.method.unwrap().parse() {
-							Ok(method) => method,
-							Err(_) => return Ok(None),
-						},
-						match req.path.unwrap().parse() {
-							Ok(path) => path,
-							Err(_) => return Ok(None),
-						},
-					),
-					headers: HeaderMap::new(),
+				let mut headers_indices = [HeaderIndices {
+					name: (0, 0),
+					value: (0, 0)
+				}; MAX_HEADERS];
+
+				let (len, method, path, version, headers_len) = {
+					let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+					//println!("Request.parse([Header; {}], [u8; {}])", headers.len(), buf.len());
+					let mut req = httparse::Request::new(&mut headers);
+					match try!(req.parse(&buf)) {
+						httparse::Status::Complete(len) => {
+							//println!("Request.parse Complete({})", len);
+							let method = Method::from_bytes(req.method.unwrap().as_bytes())?;
+							let path = req.path.unwrap();
+							let bytes_ptr = buf.as_ref().as_ptr() as usize;
+							let path_start = path.as_ptr() as usize - bytes_ptr;
+							let path_end = path_start + path.len();
+							let path = (path_start, path_end);
+							let version = if req.version.unwrap() == 1 {
+								Version::HTTP_11
+							} else {
+								Version::HTTP_10
+							};
+
+							record_header_indices(buf.as_ref(), &req.headers, &mut headers_indices);
+							let headers_len = req.headers.len();
+							(len, method, path, version, headers_len)
+						}
+						httparse::Status::Partial => return Ok(None),
+					}
+				};
+
+				let mut headers = HeaderMap::with_capacity(headers_len);
+				let slice = buf.split_to(len).freeze();
+				let path = slice.slice(path.0, path.1);
+
+				// path was found to be utf8 by httparse
+				let path = Uri::from_shared(path)?;
+				let subject = RequestLine(
+					method,
+					path,
+				);
+
+				headers.extend(HeadersAsBytesIter {
+					headers: headers_indices[..headers_len].iter(),
+					slice: slice,
+				});
+
+
+				Ok(Some(RequestHead {
+					version: version,
+					subject: subject,
+					headers: headers,
 				}))
+
 			}
 			None => Ok(None),
 		}
@@ -325,11 +368,21 @@ impl Decoder for HttpServerCodec {
 /// errors that can occur when writing to IO (the `Io` variant).
 #[derive(Debug)]
 pub enum HttpCodecError {
+	/// An invalid `Method`, such as `GE,T`.
+	Method,
+	/// An invalid `HttpVersion`, such as `HTP/1.1`
+	Version,
+	/// Uri Errors
+	Uri,
+	/// An invalid `Header`.
+	Header,
+    /// A message head is too large to be reasonable.
+    TooLarge,
+	/// An invalid `Status`, such as `1337 ELITE`.
+	Status,
 	/// An error that occurs during the writing or reading of HTTP data
 	/// from a socket.
 	Io(io::Error),
-	/// An error that occurs during the parsing of an HTTP request or response.
-	Http(httparse::Error),
 }
 
 impl Display for HttpCodecError {
@@ -341,15 +394,20 @@ impl Display for HttpCodecError {
 impl Error for HttpCodecError {
 	fn description(&self) -> &str {
 		match *self {
+			HttpCodecError::Method => "invalid Method specified",
+			HttpCodecError::Version => "invalid HTTP version specified",
+			HttpCodecError::Uri => "invalid URI",
+			HttpCodecError::Header => "invalid Header provided",
+			HttpCodecError::TooLarge => "message head is too large",
+			HttpCodecError::Status => "invalid Status provided",
 			HttpCodecError::Io(ref e) => e.description(),
-			HttpCodecError::Http(ref e) => e.description(),
 		}
 	}
 
 	fn cause(&self) -> Option<&Error> {
 		match *self {
 			HttpCodecError::Io(ref error) => Some(error),
-			HttpCodecError::Http(ref error) => Some(error),
+			_ => None,
 		}
 	}
 }
@@ -360,9 +418,29 @@ impl From<io::Error> for HttpCodecError {
 	}
 }
 
-impl From<httparse::Error> for HttpCodecError {
-	fn from(err: httparse::Error) -> HttpCodecError {
-		HttpCodecError::Http(err)
+impl From<httparse::Error> for  HttpCodecError {
+    fn from(err: httparse::Error) ->  HttpCodecError {
+		match err {
+			httparse::Error::HeaderName |
+			httparse::Error::HeaderValue |
+			httparse::Error::NewLine |
+			httparse::Error::Token => HttpCodecError::Header,
+			httparse::Error::Status => HttpCodecError::Status,
+			httparse::Error::TooManyHeaders => HttpCodecError::TooLarge,
+			httparse::Error::Version => HttpCodecError::Version,
+		}
+	}
+}
+
+impl From<http::method::InvalidMethod> for HttpCodecError {
+	fn from(_: http::method::InvalidMethod) -> HttpCodecError {
+		HttpCodecError::Method
+	}
+}
+
+impl From<http::uri::InvalidUriBytes> for HttpCodecError {
+	fn from(_: http::uri::InvalidUriBytes) -> HttpCodecError {
+		HttpCodecError::Uri
 	}
 }
 

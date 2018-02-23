@@ -8,7 +8,7 @@ use std::str::{self, FromStr};
 use stream::Stream;
 
 use unicase::Ascii;
-use http::header::{HeaderMap, HeaderValue};
+use http::header::{HeaderMap, HeaderName, HeaderValue};
 use http::header::{
 	CONNECTION,
 	ORIGIN,
@@ -22,8 +22,10 @@ use http::header::{
 use http::{Method, StatusCode, Uri};
 
 #[cfg(any(feature="sync", feature="async"))]
-use http::Version;
+use http::{self, Version};
+use httparse;
 
+use codec;
 use codec::http::RequestHead;
 use header::{WebSocketAccept, WebSocketKey, WebSocketVersion};
 use header::connection::{Connection, ConnectionOption};
@@ -65,7 +67,7 @@ impl<S, B> WsUpgrade<S, B>
 	/// Select a protocol to use in the handshake response.
 	pub fn use_protocols(mut self, protocols: Vec<&str>) -> Self
 	{
-		self.headers.insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_str(&protocols.join(", ")).unwrap());
+		self.headers.insert("Sec-WebSocket-Protocol", HeaderValue::from_str(&protocols.join(", ")).unwrap());
 		self
 	}
 
@@ -74,7 +76,7 @@ impl<S, B> WsUpgrade<S, B>
 		where I: IntoIterator<Item = Extension>
 	{
 		//let mut extensions: Vec<Extension> = extensions.into_iter().collect().join(", ");
-		self.headers.insert(SEC_WEBSOCKET_EXTENSIONS, HeaderValue::from_static(""));
+		self.headers.insert("Sec-WebSocket-Extensions", HeaderValue::from_static(""));
 		/*upsert_header!(self.headers; WebSocketExtensions; {
 			Some(protos) => protos.0.append(&mut extensions),
 			None => WebSocketExtensions(extensions)
@@ -141,7 +143,7 @@ impl<S, B> WsUpgrade<S, B>
 
 	/// The client's websocket version.
 	pub fn version(&self) -> Option<WebSocketVersion> {
-		match self.request.headers.get(SEC_WEBSOCKET_VERSION) {
+		match self.request.headers.get("Sec-WebSocket-Version") {
 			Some(value) => Some(WebSocketVersion::from_str(value.to_str().unwrap()).unwrap()),
 			_ => None,
 		}
@@ -149,7 +151,7 @@ impl<S, B> WsUpgrade<S, B>
 
 	/// Origin of the client
 	pub fn origin(&self) -> Option<&str> {
-		self.request.headers.get(ORIGIN)
+		self.request.headers.get("Origin")
 			.map(|o| str::from_utf8(o.as_ref()).unwrap())
 	}
 
@@ -169,15 +171,15 @@ impl<S, B> WsUpgrade<S, B>
 		// i.e. to construct this you must go through the validate function
 		let key = self.request.headers.get(SEC_WEBSOCKET_KEY).unwrap();
 		let key = WebSocketKey::from_str(key.to_str().unwrap()).unwrap();
-		self.headers.insert(SEC_WEBSOCKET_ACCEPT, WebSocketAccept::new(key).into());
-		self.headers.insert(
-			CONNECTION,
+		self.headers.append(HeaderName::from_bytes("Sec-WebSocket-Accept".as_bytes()).unwrap(), WebSocketAccept::new(key).into());
+		self.headers.append(
+			HeaderName::from_bytes("Connection".as_bytes()).unwrap(),
 			Connection(vec![
 				ConnectionOption::ConnectionHeader(Ascii::new("Upgrade".to_string()))
 			]).into()
 		);
-		self.headers.insert(
-			UPGRADE,
+		self.headers.append(
+			HeaderName::from_bytes("Upgrade".as_bytes()).unwrap(),
 			Upgrade(vec![Protocol::new(ProtocolName::WebSocket, None)]).into()
 		);
 
@@ -207,8 +209,8 @@ pub enum HyperIntoWsError {
 	NoConnectionHeader,
 	/// IO error from reading the underlying socket
 	Io(io::Error),
-	/// Error while parsing an incoming request
-	Parsing(::httparse::Error),
+	/// 
+	Http(codec::http::HttpCodecError),
 }
 
 impl Display for HyperIntoWsError {
@@ -230,14 +232,14 @@ impl Error for HyperIntoWsError {
 			NoWsConnectionHeader => "Invalid Connection WebSocket header",
 			NoConnectionHeader => "Missing Connection WebSocket header",
 			Io(ref e) => e.description(),
-			Parsing(ref e) => e.description(),
+			Http(ref e) => e.description(),
 		}
 	}
 
 	fn cause(&self) -> Option<&Error> {
 		match *self {
 			HyperIntoWsError::Io(ref e) => Some(e),
-			HyperIntoWsError::Parsing(ref e) => Some(e),
+			HyperIntoWsError::Http(ref e) => Some(e),
 			_ => None,
 		}
 	}
@@ -249,9 +251,9 @@ impl From<io::Error> for HyperIntoWsError {
 	}
 }
 
-impl From<::httparse::Error> for HyperIntoWsError {
-	fn from(err: ::httparse::Error) -> Self {
-		HyperIntoWsError::Parsing(err)
+impl From<httparse::Error> for HyperIntoWsError {
+	fn from(err: httparse::Error) -> Self {
+		HyperIntoWsError::Http(err.into())
 	}
 }
 
@@ -260,7 +262,7 @@ impl From<::codec::http::HttpCodecError> for HyperIntoWsError {
 	fn from(src: ::codec::http::HttpCodecError) -> Self {
 		match src {
 			::codec::http::HttpCodecError::Io(e) => HyperIntoWsError::Io(e),
-			::codec::http::HttpCodecError::Http(e) => HyperIntoWsError::Parsing(e),
+			_ => HyperIntoWsError::Http(src.into()),
 		}
 	}
 }

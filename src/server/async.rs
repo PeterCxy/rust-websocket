@@ -61,17 +61,18 @@ impl WsServer<NoTlsAcceptor, TcpListener> {
 				}
 			})
 			.and_then(|(stream, a)| {
-			stream.into_ws()
-				.map_err(|(stream, req, buf, err)| {
-					InvalidConnection {
-						stream: Some(stream),
-						parsed: req,
-						buffer: Some(buf),
-						error: err,
-					}
-				})
-				.map(move |u| (u, a))
-		});
+				stream
+					.into_ws()
+					.map_err(|(stream, req, buf, err)| {
+						InvalidConnection {
+							stream: Some(stream),
+							parsed: req,
+							buffer: Some(buf),
+							error: err,
+						}
+					})
+					.map(move |u| (u, a))
+			});
 		Box::new(future)
 	}
 }
@@ -132,7 +133,8 @@ impl WsServer<TlsAcceptor, TcpListener> {
 					.map(move |s| (s, a))
 			})
 			.and_then(|(stream, a)| {
-				stream.into_ws()
+				stream
+					.into_ws()
 					.map_err(|(stream, req, buf, err)| {
 						InvalidConnection {
 							stream: Some(stream),

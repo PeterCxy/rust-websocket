@@ -177,6 +177,7 @@ impl<'a> ws::Message for Message<'a> {
 		let opcode = frames.first()
 		                   .ok_or(WebSocketError::ProtocolError("No dataframes provided",),)
 		                   .map(|d| d.opcode())?;
+
 		let opcode = Opcode::new(opcode);
 
 		let payload_size = frames.iter().map(|d| d.size()).sum();
