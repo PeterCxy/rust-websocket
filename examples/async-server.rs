@@ -8,14 +8,15 @@ use websocket::message::{Message, OwnedMessage};
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
-use tokio::reactor::{Handle, Reactor};
+use tokio::prelude::*;
+use tokio::executor::current_thread;
+use tokio::reactor::Handle;
 use futures::{Future, Sink, Stream};
+use futures::future::{loop_fn, Loop};
 
 fn main() {
-	let mut core = Reactor::new().unwrap();
-	let handle = core.handle();
 	// bind to the server
-	let server = Server::bind("127.0.0.1:2794", &handle).unwrap();
+	let server = Server::bind("127.0.0.1:2794", &Handle::current()).unwrap();
 
 	// time to build the server's future
 	// this will be a struct containing everything the server is going to do
@@ -29,7 +30,7 @@ fn main() {
             // check if it has the protocol we want
             if !upgrade.protocols().iter().any(|s| *s == "rust-websocket") {
                 // reject it if it doesn't
-                spawn_future(upgrade.reject(), "Upgrade Rejection", &handle);
+                spawn_future(upgrade.reject(), "Upgrade Rejection", &Handle::current());
                 return Ok(());
             }
 
@@ -58,17 +59,19 @@ fn main() {
                     })
                 });
 
-            spawn_future(f, "Client Status", &handle);
+            spawn_future(f, "Client Status", &Handle::current());
             Ok(())
         });
 
-	core.background().unwrap();
+	tokio::run(loop_fn((), |acc| {
+                Ok(Loop::Continue(acc))
+        }));
 }
 
 fn spawn_future<F, I, E>(f: F, desc: &'static str, handle: &Handle)
 	where F: Future<Item = I, Error = E> + 'static,
 	      E: Debug
 {
-	handle.spawn(f.map_err(move |e| println!("{}: '{:?}'", desc, e))
+	current_thread::spawn(f.map_err(move |e| println!("{}: '{:?}'", desc, e))
 	              .map(move |_| println!("{}: Finished.", desc)));
 }

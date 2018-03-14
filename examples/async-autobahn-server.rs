@@ -6,14 +6,15 @@ use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
-use tokio::reactor::Reactor;
+use tokio::prelude::*;
+use tokio::executor::current_thread;
+use tokio::reactor::Handle;
 use futures::{Future, Sink, Stream};
+use futures::future::{loop_fn, Loop};
 
 fn main() {
-	let mut core = Reactor::new().unwrap();
-	let handle = core.handle();
 	// bind to the server
-	let server = Server::bind("127.0.0.1:9002", &handle).unwrap();
+	let server = Server::bind("127.0.0.1:9002", &Handle::current()).unwrap();
 
 	// time to build the server's future
 	// this will be a struct containing everything the server is going to do
@@ -45,11 +46,14 @@ fn main() {
                     })
                 });
 
-	          handle.spawn(f.map_err(move |e| println!("{}: '{:?}'", addr, e))
+	          current_thread::spawn(f.map_err(move |e| println!("{}: '{:?}'", addr, e))
 	                       .map(move |_| println!("{} closed.", addr)));
             Ok(())
         });
 
-    core.background().unwrap();
-	//core.run(f).unwrap();
+    current_thread::spawn(f.map_err(|_| ()));
+
+    tokio::run(loop_fn((), |acc| {
+        Ok(Loop::Continue(acc))
+    }));
 }
