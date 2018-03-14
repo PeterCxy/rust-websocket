@@ -1,13 +1,13 @@
 extern crate websocket;
 extern crate futures;
 extern crate futures_cpupool;
-extern crate tokio_core;
+extern crate tokio;
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
-use tokio_core::reactor::{Handle, Remote, Core};
+use tokio::reactor::{Handle, Reactor};
 
 use futures::{Future, Sink, Stream};
 use futures::future::{self, Loop};
@@ -25,9 +25,8 @@ use std::fmt::Debug;
 type Id = u32;
 
 fn main() {
-	let mut core = Core::new().expect("Failed to create Tokio event loop");
+	let mut core = Reactor::new().expect("Failed to create Tokio event loop");
 	let handle = core.handle();
-	let remote = core.remote();
 	let server = Server::bind("localhost:8081", &handle).expect("Failed to create server");
 	let pool = Rc::new(CpuPool::new_num_cpus());
 	let connections = Arc::new(RwLock::new(HashMap::new()));
@@ -66,7 +65,7 @@ fn main() {
 
 
 	// Handle receiving messages from a client
-	let remote_inner = remote.clone();
+	let remote_inner = handle.clone();
 	let receive_handler = pool.spawn_fn(|| {
 		receive_channel_in.for_each(move |(id, stream)| {
 			remote_inner.spawn(move |_| {
@@ -84,7 +83,7 @@ fn main() {
 
 	// Handle sending messages to a client
 	let connections_inner = connections.clone();
-	let remote_inner = remote.clone();
+	let remote_inner = handle.clone();
 	let send_handler = pool.spawn_fn(move || {
 		let connections = connections_inner.clone();
 		let remote = remote_inner.clone();
@@ -112,7 +111,7 @@ fn main() {
 		future::loop_fn(send_channel_out, move |send_channel_out| {
 			thread::sleep(Duration::from_millis(100));
 
-			let should_continue = update(connections.clone(), send_channel_out.clone(), &remote);
+			let should_continue = update(connections.clone(), send_channel_out.clone(), &handle.clone());
 			match should_continue {
 				Ok(true) => Ok(Loop::Continue(send_channel_out)),
 				Ok(false) => Ok(Loop::Break(())),
@@ -123,7 +122,8 @@ fn main() {
 
 	let handlers =
 		main_loop.select2(connection_handler.select2(receive_handler.select(send_handler)));
-	core.run(handlers).map_err(|_| println!("Error while running core loop")).unwrap();
+	core.background().unwrap();
+	//core.run(handlers).map_err(|_| println!("Error while running core loop")).unwrap();
 }
 
 fn spawn_future<F, I, E>(f: F, desc: &'static str, handle: &Handle)
@@ -141,14 +141,14 @@ fn process_message(id: u32, msg: &OwnedMessage) {
 	}
 }
 
-type SinkContent = websocket::client::async::Framed<tokio_core::net::TcpStream,
+type SinkContent = websocket::client::async::Framed<tokio::net::TcpStream,
                                                     websocket::async::MessageCodec<OwnedMessage>>;
 type SplitSink = futures::stream::SplitSink<SinkContent>;
 // Represents one tick in the main loop
 fn update(
 	connections: Arc<RwLock<HashMap<Id, SplitSink>>>,
 	channel: mpsc::UnboundedSender<(Id, String)>,
-	remote: &Remote,
+	remote: &Handle,
 ) -> Result<bool, ()> {
 	remote.spawn(move |handle| {
 		             for (id, _) in connections.read().unwrap().iter() {

@@ -1,6 +1,6 @@
 extern crate websocket;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 
 use std::fmt::Debug;
 
@@ -8,11 +8,11 @@ use websocket::message::{Message, OwnedMessage};
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
-use tokio_core::reactor::{Handle, Core};
+use tokio::reactor::{Handle, Reactor};
 use futures::{Future, Sink, Stream};
 
 fn main() {
-	let mut core = Core::new().unwrap();
+	let mut core = Reactor::new().unwrap();
 	let handle = core.handle();
 	// bind to the server
 	let server = Server::bind("127.0.0.1:2794", &handle).unwrap();
@@ -62,7 +62,7 @@ fn main() {
             Ok(())
         });
 
-	core.run(f).unwrap();
+	core.background().unwrap();
 }
 
 fn spawn_future<F, I, E>(f: F, desc: &'static str, handle: &Handle)

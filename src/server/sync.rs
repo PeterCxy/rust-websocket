@@ -12,9 +12,9 @@ use server::upgrade::sync::{Upgrade, IntoWs, Buffer};
 pub use server::upgrade::HyperIntoWsError;
 
 #[cfg(feature="async")]
-use tokio_core::reactor::Handle;
+use tokio::reactor::Handle;
 #[cfg(feature="async")]
-use tokio_core::net::TcpListener as AsyncTcpListener;
+use tokio::net::TcpListener as AsyncTcpListener;
 #[cfg(feature="async")]
 use server::async;
 
@@ -90,7 +90,7 @@ impl<S> WsServer<S, TcpListener>
 	pub fn into_async(self, handle: &Handle) -> io::Result<async::Server<S>> {
 		let addr = self.listener.local_addr()?;
 		Ok(WsServer {
-		       listener: AsyncTcpListener::from_listener(self.listener, &addr, handle)?,
+		       listener: AsyncTcpListener::from_std(self.listener, handle)?,
 		       ssl_acceptor: self.ssl_acceptor,
 		   })
 	}

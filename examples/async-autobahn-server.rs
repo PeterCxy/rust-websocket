@@ -1,16 +1,16 @@
 extern crate websocket;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 
 use websocket::message::OwnedMessage;
 use websocket::server::InvalidConnection;
 use websocket::async::Server;
 
-use tokio_core::reactor::Core;
+use tokio::reactor::Reactor;
 use futures::{Future, Sink, Stream};
 
 fn main() {
-	let mut core = Core::new().unwrap();
+	let mut core = Reactor::new().unwrap();
 	let handle = core.handle();
 	// bind to the server
 	let server = Server::bind("127.0.0.1:9002", &handle).unwrap();
@@ -50,5 +50,6 @@ fn main() {
             Ok(())
         });
 
-	core.run(f).unwrap();
+    core.background().unwrap();
+	//core.run(f).unwrap();
 }
