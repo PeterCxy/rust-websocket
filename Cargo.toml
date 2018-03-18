@@ -39,8 +39,8 @@ git = "https://github.com/hyperium/http"
 branch = "master"
 
 [dependencies.hyper]
-path = "../hyper"
-features = ["raw_status"]
+git = "https://github.com/hyperium/hyper"
+branch = "0.12.x"
 
 [dev-dependencies]
 futures-cpupool = "0.1"
