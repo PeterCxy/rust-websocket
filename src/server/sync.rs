@@ -33,7 +33,7 @@ pub type Server<S> = WsServer<S, TcpListener>;
 
 /// Synchronous methods for creating a server and accepting incoming connections.
 impl<S> WsServer<S, TcpListener>
-    where S: OptionalTlsAcceptor
+    where S: OptionalTlsAcceptor + Send
 {
 	/// Get the socket address of this server
 	pub fn local_addr(&self) -> io::Result<SocketAddr> {

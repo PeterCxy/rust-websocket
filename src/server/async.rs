@@ -17,14 +17,14 @@ use tokio_tls::{TlsAcceptorExt, TlsStream};
 
 /// The asynchronous specialization of a websocket server.
 /// Use this struct to create asynchronous servers.
-pub type Server<S> = WsServer<S, TcpListener>;
+pub type Server<S: Send> = WsServer<S, TcpListener>;
 
 /// A stream of websocket connections and addresses the server generates.
 ///
 /// Each item of the stream is the address of the incoming connection and an `Upgrade`
 /// struct which lets the user decide whether to turn the connection into a websocket
 /// connection or reject it.
-pub type Incoming<S> = Box<Stream<Item = (Upgrade<S>, SocketAddr), Error = InvalidConnection<S, BytesMut>>>;
+pub type Incoming<S: Send> = Box<Stream<Item = (Upgrade<S>, SocketAddr), Error = InvalidConnection<S, BytesMut>> + Send>;
 
 /// Asynchronous methods for creating an async server and accepting incoming connections.
 impl WsServer<NoTlsAcceptor, TcpListener> {
@@ -123,7 +123,7 @@ impl WsServer<TlsAcceptor, TcpListener> {
 			})
 			.and_then(move |stream| {
 				let a = stream.local_addr().unwrap();
-				acceptor.accept_async(stream) .map_err(|e| {
+				acceptor.accept_async(stream).map_err(|e| {
 					InvalidConnection {
 						stream: None,
 						parsed: None,

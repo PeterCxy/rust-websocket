@@ -66,7 +66,7 @@ pub type Upgrade<S> = WsUpgrade<S, BytesMut>;
 /// turned on. A type alias for this specialization of `WsUpgrade` lives in this
 /// module under the name `Upgrade`.
 impl<S> WsUpgrade<S, BytesMut>
-    where S: Stream + 'static
+    where S: Stream + ::std::marker::Send + 'static
 {
 	/// Asynchronously accept the websocket handshake, then create a client.
 	/// This will asynchronously send a response accepting the connection
@@ -192,7 +192,7 @@ impl<S> WsUpgrade<S, BytesMut>
 /// ```
 pub trait IntoWs {
 	/// The type of stream this upgrade process is working with (TcpStream, etc.)
-	type Stream: Stream;
+	type Stream: Stream + ::std::marker::Send;
 	/// An error value in case the stream is not asking for a websocket connection
 	/// or something went wrong. It is common to also include the stream here.
 	type Error;
@@ -202,16 +202,16 @@ pub trait IntoWs {
 	///
 	/// Note: this is the asynchronous version, meaning it will not block when
 	/// trying to read a request.
-	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error>>;
+	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send>;
 }
 
 impl<S> IntoWs for S
-    where S: Stream + 'static
+    where S: Stream + ::std::marker::Send + 'static
 {
 	type Stream = S;
 	type Error = (S, Option<RequestHead>, BytesMut, HyperIntoWsError);
 
-	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error>> {
+	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send> {
 		let future = self.framed(HttpServerCodec)
 			.into_future()
 			.map_err(|(e, s)| {

@@ -49,7 +49,7 @@ pub mod sync;
 /// Otherwise if the stream is simply `Read + Write` blocking functions will be
 /// available to complete the handshake.
 pub struct WsUpgrade<S, B>
-	where S: Stream
+	where S: Stream + Send, B: Send
 {
 	/// The headers that will be used in the handshake response.
 	pub headers: HeaderMap,
@@ -62,7 +62,7 @@ pub struct WsUpgrade<S, B>
 }
 
 impl<S, B> WsUpgrade<S, B>
-    where S: Stream
+    where S: Stream + Send, B: Send
 {
 	/// Select a protocol to use in the handshake response.
 	pub fn use_protocols(mut self, protocols: Vec<&str>) -> Self

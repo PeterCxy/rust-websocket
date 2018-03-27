@@ -60,8 +60,9 @@ use native_tls::TlsStream;
 mod async_imports {
 	pub use super::super::async;
 	pub use tokio_io::codec::Framed;
-	pub use tokio_core::net::TcpStreamNew;
-	pub use tokio_core::reactor::Handle;
+	pub use tokio::net::TcpStream as AsyncTcpStream;
+	pub use tokio::net::ConnectFuture;
+	pub use tokio::reactor::Handle;
 	pub use futures::{Future, Sink};
 	pub use futures::future;
 	pub use futures::Stream as FutureStream;
@@ -450,7 +451,7 @@ impl<'u> ClientBuilder<'u> {
 	/// ```
 	#[cfg(feature="sync")]
 	pub fn connect_on<S>(&mut self, mut stream: S) -> WebSocketResult<Client<S>>
-		where S: Stream
+		where S: Stream + Send
 	{
 		// send request
 		let resource = self.build_request();
@@ -462,7 +463,7 @@ impl<'u> ClientBuilder<'u> {
 		let mut reader = BufReader::new(stream);
 
 		loop {
-			reader.read_line(&mut buf);
+			reader.read_line(&mut buf).unwrap();
 			if &buf[buf.len() - 4..] == "\r\n\r\n" {
 				break;
 			}
@@ -840,7 +841,7 @@ impl<'u> ClientBuilder<'u> {
 		&self,
 		secure: Option<bool>,
 		handle: &Handle,
-	) -> WebSocketResult<TcpStreamNew> {
+	) -> WebSocketResult<ConnectFuture> {
 		// get the address to connect to, return an error future if ther's a problem
 		let address = match self.extract_host_port(secure).and_then(|p| Ok(p.to_socket_addrs()?)) {
 			Ok(mut s) => {
@@ -855,7 +856,7 @@ impl<'u> ClientBuilder<'u> {
 		};
 
 		// connect a tcp stream
-		Ok(async::TcpStream::connect(&address, handle))
+		Ok(async::TcpStream::connect(&address))
 	}
 
 	#[cfg(any(feature="sync", feature="async"))]

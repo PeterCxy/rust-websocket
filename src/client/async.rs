@@ -44,9 +44,9 @@
 //! # }
 //! ```
 
-pub use tokio_core::reactor::Handle;
+pub use tokio::reactor::Handle;
 pub use tokio_io::codec::Framed;
-pub use tokio_core::net::TcpStream;
+pub use tokio::net::TcpStream;
 pub use futures::Future;
 use http::header::HeaderMap;
 

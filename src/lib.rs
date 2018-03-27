@@ -43,8 +43,6 @@ extern crate native_tls;
 #[cfg(feature="async")]
 extern crate tokio;
 #[cfg(feature="async")]
-extern crate tokio_core;
-#[cfg(feature="async")]
 extern crate tokio_io;
 #[cfg(feature="async")]
 extern crate bytes;

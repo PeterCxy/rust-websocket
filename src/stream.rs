@@ -67,7 +67,7 @@ pub mod async {
 	use std::io::{self, Read, Write};
 	use futures::Poll;
 	pub use super::ReadWritePair;
-	pub use tokio_core::net::TcpStream;
+	pub use tokio::net::TcpStream;
 	pub use tokio_io::{AsyncWrite, AsyncRead};
 	pub use tokio_io::io::{ReadHalf, WriteHalf};
 

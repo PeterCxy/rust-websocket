@@ -32,7 +32,7 @@ impl OptionalTlsAcceptor for TlsAcceptor {}
 /// websocket handshake, in case one wants to use the connection for something
 /// else (such as HTTP).
 pub struct InvalidConnection<S, B>
-	where S: Stream
+	where S: Stream + Send, B: Send
 {
 	/// if the stream was successfully setup it will be included here
 	/// on a failed connection.
@@ -87,7 +87,7 @@ pub struct InvalidConnection<S, B>
 /// check out the docs over at `websocket::server::upgrade::sync` for more.
 #[cfg(any(feature="sync", feature="async"))]
 pub struct WsServer<S, L>
-	where S: OptionalTlsAcceptor
+	where S: OptionalTlsAcceptor + Send, L: Send
 {
 	listener: L,
 	/// The SSL acceptor given to the server

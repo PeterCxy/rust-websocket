@@ -45,7 +45,7 @@ pub type Upgrade<S> = WsUpgrade<S, Option<Buffer>>;
 /// These methods are the synchronous ways of accepting and rejecting a websocket
 /// handshake.
 impl<S> WsUpgrade<S, Option<Buffer>>
-	where S: Stream
+	where S: Stream + Send
 {
 	/// Accept the handshake request and send a response,
 	/// if nothing goes wrong a client will be created.
@@ -93,7 +93,7 @@ impl<S> WsUpgrade<S, Option<Buffer>>
 }
 
 impl<S, B> WsUpgrade<S, B>
-	where S: Stream + AsTcpStream
+	where S: Stream + AsTcpStream + Send, B: Send
 {
 	/// Get a handle to the underlying TCP stream, useful to be able to set
 	/// TCP options, etc.
@@ -138,7 +138,7 @@ impl<S, B> WsUpgrade<S, B>
 /// ```
 pub trait IntoWs {
 	/// The type of stream this upgrade process is working with (TcpStream, etc.)
-	type Stream: Stream;
+	type Stream: Stream + Send;
 	/// An error value in case the stream is not asking for a websocket connection
 	/// or something went wrong. It is common to also include the stream here.
 	type Error;
@@ -149,7 +149,7 @@ pub trait IntoWs {
 }
 
 impl<S> IntoWs for S
-    where S: Stream
+    where S: Stream + Send
 {
 	type Stream = S;
 	type Error = (S, Option<RequestHead>, Option<Buffer>, HyperIntoWsError);
@@ -219,7 +219,7 @@ impl<S> IntoWs for S
 }
 
 impl<S> IntoWs for RequestStreamPair<S>
-    where S: Stream
+    where S: Stream + Send
 {
 	type Stream = S;
 	type Error = (S, RequestHead, HyperIntoWsError);
