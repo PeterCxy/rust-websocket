@@ -7,19 +7,25 @@ use std::fmt::Arguments;
 /// This is an abstraction around readable and writable things to be able
 /// to speak websockets over ssl, tcp, unix sockets, etc.
 pub trait Stream: Read + Write {}
-impl<S> Stream for S where S: Read + Write {}
+impl<S> Stream for S
+where
+	S: Read + Write,
+{
+}
 
 /// If you would like to combine an input stream and an output stream into a single
 /// stream to talk websockets over then this is the struct for you!
 ///
 /// This is useful if you want to use different mediums for different directions.
 pub struct ReadWritePair<R, W>(pub R, pub W)
-	where R: Read,
-	      W: Write;
+where
+	R: Read,
+	W: Write;
 
 impl<R, W> Read for ReadWritePair<R, W>
-	where R: Read,
-	      W: Write
+where
+	R: Read,
+	W: Write,
 {
 	#[inline(always)]
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -40,8 +46,9 @@ impl<R, W> Read for ReadWritePair<R, W>
 }
 
 impl<R, W> Write for ReadWritePair<R, W>
-	where R: Read,
-	      W: Write
+where
+	R: Read,
+	W: Write,
 {
 	#[inline(always)]
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -62,7 +69,7 @@ impl<R, W> Write for ReadWritePair<R, W>
 }
 
 /// A collection of traits and implementations for async streams.
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 pub mod async {
 	use std::io::{self, Read, Write};
 	use futures::Poll;
@@ -75,17 +82,23 @@ pub mod async {
 	/// This let's us abstract over many async streams like tcp, ssl,
 	/// udp, ssh, etc.
 	pub trait Stream: AsyncRead + AsyncWrite {}
-	impl<S> Stream for S where S: AsyncRead + AsyncWrite {}
+	impl<S> Stream for S
+	where
+		S: AsyncRead + AsyncWrite,
+	{
+	}
 
 	impl<R, W> AsyncRead for ReadWritePair<R, W>
-		where R: AsyncRead,
-		      W: Write
+	where
+		R: AsyncRead,
+		W: Write,
 	{
 	}
 
 	impl<R, W> AsyncWrite for ReadWritePair<R, W>
-		where W: AsyncWrite,
-		      R: Read
+	where
+		W: AsyncWrite,
+		R: Read,
 	{
 		fn shutdown(&mut self) -> Poll<(), io::Error> {
 			self.1.shutdown()
@@ -94,14 +107,14 @@ pub mod async {
 }
 
 /// A collection of traits and implementations for synchronous streams.
-#[cfg(feature="sync")]
+#[cfg(feature = "sync")]
 pub mod sync {
 	pub use super::ReadWritePair;
 	use std::io::{self, Read, Write};
 	use std::ops::Deref;
 	pub use std::net::TcpStream;
 	pub use std::net::Shutdown;
-	#[cfg(feature="sync-ssl")]
+	#[cfg(feature = "sync-ssl")]
 	pub use native_tls::TlsStream;
 
 	pub use super::Stream;
@@ -111,7 +124,11 @@ pub mod sync {
 	/// `Stream` like `nonblocking`.
 	pub trait NetworkStream: Read + Write + AsTcpStream {}
 
-	impl<S> NetworkStream for S where S: Read + Write + AsTcpStream {}
+	impl<S> NetworkStream for S
+	where
+		S: Read + Write + AsTcpStream,
+	{
+	}
 
 	/// some streams can be split up into separate reading and writing components
 	/// `TcpStream` is an example. This trait marks this ability so one can split
@@ -129,8 +146,9 @@ pub mod sync {
 	}
 
 	impl<R, W> Splittable for ReadWritePair<R, W>
-		where R: Read,
-		      W: Write
+	where
+		R: Read,
+		W: Write,
 	{
 		type Reader = R;
 		type Writer = W;
@@ -162,7 +180,7 @@ pub mod sync {
 		}
 	}
 
-	#[cfg(feature="sync-ssl")]
+	#[cfg(feature = "sync-ssl")]
 	impl AsTcpStream for TlsStream<TcpStream> {
 		fn as_tcp(&self) -> &TcpStream {
 			self.get_ref()
@@ -170,7 +188,8 @@ pub mod sync {
 	}
 
 	impl<T> AsTcpStream for Box<T>
-        where T: AsTcpStream
+	where
+		T: AsTcpStream,
 	{
 		fn as_tcp(&self) -> &TcpStream {
 			self.deref().as_tcp()

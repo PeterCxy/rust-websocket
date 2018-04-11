@@ -10,9 +10,9 @@ use server::InvalidConnection;
 use bytes::BytesMut;
 pub use tokio::reactor::Handle;
 
-#[cfg(any(feature="async-ssl"))]
+#[cfg(any(feature = "async-ssl"))]
 use native_tls::TlsAcceptor;
-#[cfg(any(feature="async-ssl"))]
+#[cfg(any(feature = "async-ssl"))]
 use tokio_tls::{TlsAcceptorExt, TlsStream};
 
 /// The asynchronous specialization of a websocket server.
@@ -24,7 +24,13 @@ pub type Server<S: Send> = WsServer<S, TcpListener>;
 /// Each item of the stream is the address of the incoming connection and an `Upgrade`
 /// struct which lets the user decide whether to turn the connection into a websocket
 /// connection or reject it.
-pub type Incoming<S: Send> = Box<Stream<Item = (Upgrade<S>, SocketAddr), Error = InvalidConnection<S, BytesMut>> + Send>;
+pub type Incoming<S: Send> = Box<
+	Stream<
+		Item = (Upgrade<S>, SocketAddr),
+		Error = InvalidConnection<S, BytesMut>,
+	>
+		+ Send,
+>;
 
 /// Asynchronous methods for creating an async server and accepting incoming connections.
 impl WsServer<NoTlsAcceptor, TcpListener> {
@@ -51,35 +57,34 @@ impl WsServer<NoTlsAcceptor, TcpListener> {
 	/// example for a good echo server example.
 	pub fn incoming(self) -> Incoming<TcpStream> {
 		let future = self.listener
-			.incoming()
-			.map_err(|e| {
+		                 .incoming()
+		                 .map_err(|e| {
+			InvalidConnection {
+				stream: None,
+				parsed: None,
+				buffer: None,
+				error: e.into(),
+			}
+		})
+		                 .and_then(|stream| {
+			let a = stream.local_addr().unwrap();
+			stream.into_ws()
+			      .map_err(|(stream, req, buf, err)| {
 				InvalidConnection {
-					stream: None,
-					parsed: None,
-					buffer: None,
-					error: e.into(),
+					stream: Some(stream),
+					parsed: req,
+					buffer: Some(buf),
+					error: err,
 				}
 			})
-			.and_then(|stream| {
-				let a = stream.local_addr().unwrap();
-				stream
-					.into_ws()
-					.map_err(|(stream, req, buf, err)| {
-						InvalidConnection {
-							stream: Some(stream),
-							parsed: req,
-							buffer: Some(buf),
-							error: err,
-						}
-					})
-					.map(move |u| (u, a))
-			});
+			      .map(move |u| (u, a))
+		});
 		Box::new(future)
 	}
 }
 
 /// Asynchronous methods for creating an async SSL server and accepting incoming connections.
-#[cfg(any(feature="async-ssl"))]
+#[cfg(any(feature = "async-ssl"))]
 impl WsServer<TlsAcceptor, TcpListener> {
 	/// Bind an SSL websocket server to an address.
 	/// Creating a websocket server can be done immediately so this does not
@@ -112,40 +117,40 @@ impl WsServer<TlsAcceptor, TcpListener> {
 	pub fn incoming(self) -> Incoming<TlsStream<TcpStream>> {
 		let acceptor = self.ssl_acceptor;
 		let future = self.listener
-			.incoming()
-			.map_err(|e| {
+		                 .incoming()
+		                 .map_err(|e| {
+			InvalidConnection {
+				stream: None,
+				parsed: None,
+				buffer: None,
+				error: e.into(),
+			}
+		})
+		                 .and_then(move |stream| {
+			let a = stream.local_addr().unwrap();
+			acceptor.accept_async(stream)
+			        .map_err(|e| {
 				InvalidConnection {
 					stream: None,
 					parsed: None,
 					buffer: None,
-					error: e.into(),
+					// TODO: better error types
+					error: io::Error::new(io::ErrorKind::Other, e).into(),
 				}
 			})
-			.and_then(move |stream| {
-				let a = stream.local_addr().unwrap();
-				acceptor.accept_async(stream).map_err(|e| {
-					InvalidConnection {
-						stream: None,
-						parsed: None,
-						buffer: None,
-						// TODO: better error types
-						error: io::Error::new(io::ErrorKind::Other, e).into(),
-					}
-				})
-					.map(move |s| (s, a))
+			        .map(move |s| (s, a))
+		})
+		                 .and_then(|(stream, a)| {
+			stream.into_ws()
+			      .map_err(|(stream, req, buf, err)| {
+				InvalidConnection {
+					stream: Some(stream),
+					parsed: req,
+					buffer: Some(buf),
+					error: err,
+				}
 			})
-			.and_then(|(stream, a)| {
-				stream
-					.into_ws()
-					.map_err(|(stream, req, buf, err)| {
-						InvalidConnection {
-							stream: Some(stream),
-							parsed: req,
-							buffer: Some(buf),
-							error: err,
-						}
-					})
-					.map(move |u| (u, a))
+			      .map(move |u| (u, a))
 		});
 		Box::new(future)
 	}

@@ -21,9 +21,9 @@ impl Deref for WebSocketProtocol {
 impl FromStr for WebSocketProtocol {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(WebSocketProtocol(s.split(',')
-			.map(|s| s.trim().to_owned())
-			.collect()))
+		Ok(WebSocketProtocol(
+			s.split(',').map(|s| s.trim().to_owned()).collect(),
+		))
 	}
 }
 
@@ -52,7 +52,10 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(protocol);
 
-		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Protocol: foo, bar\r\n");
+		assert_eq!(
+			&headers.to_string()[..],
+			"Sec-WebSocket-Protocol: foo, bar\r\n"
+		);
 	}
 	#[bench]
 	fn bench_header_protocol_parse(b: &mut test::Bencher) {

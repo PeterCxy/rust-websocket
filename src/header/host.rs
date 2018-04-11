@@ -10,8 +10,9 @@ pub struct Host {
 
 impl Host {
 	pub fn new<H, P>(hostname: H, port: P) -> Host
-	where H: Into<Cow<'static, str>>,
-		P: Into<Option<u16>>
+	where
+		H: Into<Cow<'static, str>>,
+		P: Into<Option<u16>>,
 	{
 		Host {
 			hostname: hostname.into(),
@@ -41,9 +42,7 @@ impl FromStr for Host {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Host, Self::Err> {
 		let idx = s.rfind(':');
-		let port = idx.and_then(
-			|idx| s[idx + 1..].parse().ok()
-		);
+		let port = idx.and_then(|idx| s[idx + 1..].parse().ok());
 		let hostname = match port {
 			None => s,
 			Some(_) => &s[..idx.unwrap()],

@@ -38,17 +38,17 @@ extern crate rand;
 extern crate byteorder;
 extern crate sha1;
 extern crate base64;
-#[cfg(any(feature="sync-ssl", feature="async-ssl"))]
+#[cfg(any(feature = "sync-ssl", feature = "async-ssl"))]
 extern crate native_tls;
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 extern crate tokio;
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 extern crate tokio_io;
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 extern crate bytes;
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 pub extern crate futures;
-#[cfg(feature="async-ssl")]
+#[cfg(feature = "async-ssl")]
 extern crate tokio_tls;
 
 #[macro_use]
@@ -63,12 +63,12 @@ pub mod message;
 pub mod result;
 pub mod header;
 
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 pub mod codec;
 
-#[cfg(feature="sync")]
+#[cfg(feature = "sync")]
 pub mod receiver;
-#[cfg(feature="sync")]
+#[cfg(feature = "sync")]
 pub mod sender;
 
 pub mod client;
@@ -76,7 +76,7 @@ pub mod server;
 pub mod stream;
 
 /// A collection of handy synchronous-only parts of the crate.
-#[cfg(feature="sync")]
+#[cfg(feature = "sync")]
 pub mod sync {
 	pub use sender;
 	pub use sender::Writer;
@@ -105,7 +105,7 @@ pub mod sync {
 }
 
 /// A collection of handy asynchronous-only parts of the crate.
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 pub mod async {
 	pub use codec;
 	pub use codec::ws::MessageCodec;

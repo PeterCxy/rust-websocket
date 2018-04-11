@@ -9,19 +9,11 @@ use stream::Stream;
 
 use unicase::Ascii;
 use http::header::{HeaderMap, HeaderName, HeaderValue};
-use http::header::{
-	CONNECTION,
-	ORIGIN,
-	SEC_WEBSOCKET_ACCEPT,
-	SEC_WEBSOCKET_EXTENSIONS,
-	SEC_WEBSOCKET_KEY,
-	SEC_WEBSOCKET_PROTOCOL,
-	SEC_WEBSOCKET_VERSION,
-	UPGRADE,
-};
+use http::header::{CONNECTION, ORIGIN, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS,
+                   SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE};
 use http::{Method, StatusCode, Uri};
 
-#[cfg(any(feature="sync", feature="async"))]
+#[cfg(any(feature = "sync", feature = "async"))]
 use http::{self, Version};
 use httparse;
 
@@ -32,10 +24,10 @@ use header::connection::{Connection, ConnectionOption};
 use header::upgrade::{Protocol, ProtocolName, Upgrade};
 use header::sec_websocket_extensions::Extension;
 
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 pub mod async;
 
-#[cfg(feature="sync")]
+#[cfg(feature = "sync")]
 pub mod sync;
 
 /// Intermediate representation of a half created websocket session.
@@ -49,7 +41,9 @@ pub mod sync;
 /// Otherwise if the stream is simply `Read + Write` blocking functions will be
 /// available to complete the handshake.
 pub struct WsUpgrade<S, B>
-	where S: Stream + Send, B: Send
+where
+	S: Stream + Send,
+	B: Send,
 {
 	/// The headers that will be used in the handshake response.
 	pub headers: HeaderMap,
@@ -62,18 +56,23 @@ pub struct WsUpgrade<S, B>
 }
 
 impl<S, B> WsUpgrade<S, B>
-    where S: Stream + Send, B: Send
+where
+	S: Stream + Send,
+	B: Send,
 {
 	/// Select a protocol to use in the handshake response.
-	pub fn use_protocols(mut self, protocols: Vec<&str>) -> Self
-	{
-		self.headers.insert("Sec-WebSocket-Protocol", HeaderValue::from_str(&protocols.join(", ")).unwrap());
+	pub fn use_protocols(mut self, protocols: Vec<&str>) -> Self {
+		self.headers.insert(
+			"Sec-WebSocket-Protocol",
+			HeaderValue::from_str(&protocols.join(", ")).unwrap(),
+		);
 		self
 	}
 
 	/// Select multiple extensions to use in the connection
 	pub fn use_extensions<I>(mut self, extensions: I) -> Self
-		where I: IntoIterator<Item = Extension>
+	where
+		I: IntoIterator<Item = Extension>,
 	{
 		//let mut extensions: Vec<Extension> = extensions.into_iter().collect().join(", ");
 		self.headers.insert("Sec-WebSocket-Extensions", HeaderValue::from_static(""));
@@ -92,53 +91,53 @@ impl<S, B> WsUpgrade<S, B>
 	/// A list of protocols requested from the client.
 	pub fn protocols(&self) -> Vec<&str> {
 		self.request
-			.headers
-			.get(SEC_WEBSOCKET_PROTOCOL)
-			.map(|e| {
-				str::from_utf8(e.as_bytes()).unwrap()
-					.split(',')
-					.filter_map(|x| match x.trim() {
-						"" => None,
-						y => Some(y),
-					})
-					.collect::<Vec<&str>>()
-			})
-			.unwrap_or(vec![])
+		    .headers
+		    .get(SEC_WEBSOCKET_PROTOCOL)
+		    .map(|e| {
+			str::from_utf8(e.as_bytes())
+				.unwrap()
+				.split(',')
+				.filter_map(|x| match x.trim() {
+					"" => None,
+					y => Some(y),
+				})
+				.collect::<Vec<&str>>()
+		})
+		    .unwrap_or(vec![])
 	}
 
 	/// A list of extensions requested from the client.
 	pub fn extensions(&self) -> Vec<Extension> {
 		self.request
-			.headers
-			.get(SEC_WEBSOCKET_EXTENSIONS)
-			.map(|e| {
-				str::from_utf8(e.as_bytes()).unwrap()
-					.split(',')
-					.filter_map(|x| match x.trim() {
-						"" => None,
-						y => Some(y),
-					})
-					.filter_map(|x| match Extension::from_str(x) {
-						Ok(ext) => Some(ext),
-						_ => None,
-					})
-					.collect::<Vec<Extension>>()
-			}).unwrap_or(vec![])
+		    .headers
+		    .get(SEC_WEBSOCKET_EXTENSIONS)
+		    .map(|e| {
+			str::from_utf8(e.as_bytes())
+				.unwrap()
+				.split(',')
+				.filter_map(|x| match x.trim() {
+					"" => None,
+					y => Some(y),
+				})
+				.filter_map(|x| match Extension::from_str(x) {
+					Ok(ext) => Some(ext),
+					_ => None,
+				})
+				.collect::<Vec<Extension>>()
+		})
+		    .unwrap_or(vec![])
 	}
 
 	/// The client's websocket accept key.
 	pub fn key(&self) -> Option<[u8; 16]> {
-		self.request
-			.headers
-			.get(SEC_WEBSOCKET_KEY)
-			.map(|k| {
-				let k = k.as_bytes();
-				let mut key = [0u8; 16];
-				for (&x, p) in k.iter().zip(key.iter_mut()) {
-					*p = x;
-				}
-				key
-			})
+		self.request.headers.get(SEC_WEBSOCKET_KEY).map(|k| {
+			let k = k.as_bytes();
+			let mut key = [0u8; 16];
+			for (&x, p) in k.iter().zip(key.iter_mut()) {
+				*p = x;
+			}
+			key
+		})
 	}
 
 	/// The client's websocket version.
@@ -151,13 +150,17 @@ impl<S, B> WsUpgrade<S, B>
 
 	/// Origin of the client
 	pub fn origin(&self) -> Option<&str> {
-		self.request.headers.get("Origin")
-			.map(|o| str::from_utf8(o.as_ref()).unwrap())
+		self.request.headers.get("Origin").map(|o| str::from_utf8(o.as_ref()).unwrap())
 	}
 
-	#[cfg(feature="sync")]
+	#[cfg(feature = "sync")]
 	fn send(&mut self, status: StatusCode) -> io::Result<()> {
-		write!(&mut self.stream, "{:?} {}\r\n", self.request.version, status)?;
+		write!(
+			&mut self.stream,
+			"{:?} {}\r\n",
+			self.request.version,
+			status
+		)?;
 		write!(&mut self.stream, "{:?}\r\n", self.headers)?;
 		Ok(())
 	}
@@ -171,16 +174,22 @@ impl<S, B> WsUpgrade<S, B>
 		// i.e. to construct this you must go through the validate function
 		let key = self.request.headers.get(SEC_WEBSOCKET_KEY).unwrap();
 		let key = WebSocketKey::from_str(key.to_str().unwrap()).unwrap();
-		self.headers.append(HeaderName::from_bytes("Sec-WebSocket-Accept".as_bytes()).unwrap(), WebSocketAccept::new(key).into());
+		self.headers.append(
+			HeaderName::from_bytes("Sec-WebSocket-Accept".as_bytes()).unwrap(),
+			WebSocketAccept::new(key).into(),
+		);
 		self.headers.append(
 			HeaderName::from_bytes("Connection".as_bytes()).unwrap(),
 			Connection(vec![
-				ConnectionOption::ConnectionHeader(Ascii::new("Upgrade".to_string()))
-			]).into()
+				ConnectionOption::ConnectionHeader(
+					Ascii::new("Upgrade".to_string())
+				),
+			])
+			.into(),
 		);
 		self.headers.append(
 			HeaderName::from_bytes("Upgrade".as_bytes()).unwrap(),
-			Upgrade(vec![Protocol::new(ProtocolName::WebSocket, None)]).into()
+			Upgrade(vec![Protocol::new(ProtocolName::WebSocket, None)]).into(),
 		);
 
 		StatusCode::SWITCHING_PROTOCOLS
@@ -209,7 +218,7 @@ pub enum HyperIntoWsError {
 	NoConnectionHeader,
 	/// IO error from reading the underlying socket
 	Io(io::Error),
-	/// 
+	///
 	Http(codec::http::HttpCodecError),
 }
 
@@ -257,7 +266,7 @@ impl From<httparse::Error> for HyperIntoWsError {
 	}
 }
 
-#[cfg(feature="async")]
+#[cfg(feature = "async")]
 impl From<::codec::http::HttpCodecError> for HyperIntoWsError {
 	fn from(src: ::codec::http::HttpCodecError) -> Self {
 		match src {
@@ -267,7 +276,7 @@ impl From<::codec::http::HttpCodecError> for HyperIntoWsError {
 	}
 }
 
-#[cfg(any(feature="sync", feature="async"))]
+#[cfg(any(feature = "sync", feature = "async"))]
 /// Check whether an incoming request is a valid WebSocket upgrade attempt.
 pub fn validate(
 	method: &Method,
@@ -283,9 +292,10 @@ pub fn validate(
 		return Err(HyperIntoWsError::UnsupportedHttpVersion);
 	}
 
-	if let Some(version) = headers.get(SEC_WEBSOCKET_VERSION)
-		.map(|v| v.to_str().unwrap().parse::<WebSocketVersion>().unwrap()
-	) {
+	if let Some(version) = headers.get(SEC_WEBSOCKET_VERSION).map(|v| {
+		v.to_str().unwrap().parse::<WebSocketVersion>().unwrap()
+	})
+	{
 		if version != WebSocketVersion::WebSocket13 {
 			return Err(HyperIntoWsError::UnsupportedWebsocketVersion);
 		}
@@ -295,9 +305,7 @@ pub fn validate(
 		return Err(HyperIntoWsError::NoSecWsKeyHeader);
 	}
 
-	match headers.get(UPGRADE)
-		.map(|v| v.to_str().unwrap().parse().unwrap())
-	{
+	match headers.get(UPGRADE).map(|v| v.to_str().unwrap().parse().unwrap()) {
 		Some(Upgrade(ref upgrade)) => {
 			if upgrade.iter().all(|u| u.name != ProtocolName::WebSocket) {
 				return Err(HyperIntoWsError::NoWsUpgradeHeader);

@@ -21,10 +21,7 @@ fn main() {
 		current_case_id += 1;
 		let url = addr.clone() + "/runCase?case=" + &case_id.to_string()[..] + "&agent=" + agent;
 
-		let client = ClientBuilder::new(&url)
-			.unwrap()
-			.connect_insecure()
-			.unwrap();
+		let client = ClientBuilder::new(&url).unwrap().connect_insecure().unwrap();
 
 		let (mut receiver, mut sender) = client.split().unwrap();
 

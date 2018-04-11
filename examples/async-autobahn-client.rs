@@ -1,27 +1,25 @@
 extern crate websocket;
-extern crate tokio_core;
 extern crate futures;
+extern crate tokio;
 
 use websocket::{ClientBuilder, OwnedMessage};
 use websocket::result::WebSocketError;
-use tokio_core::reactor::Core;
 use futures::sink::Sink;
 use futures::stream::Stream;
 use futures::Future;
 use futures::future::{self, Loop};
+use tokio::reactor::Handle;
 
-type BoxFuture<I, E> = Box<Future<Item = I, Error = E>>;
+type BoxFuture<I, E> = Box<Future<Item = I, Error = E> + Send>;
 
 fn main() {
 	let addr = "ws://127.0.0.1:9001".to_string();
 	let agent = "rust-websocket";
-	let mut core = Core::new().unwrap();
-	let handle = core.handle();
 
 	println!("Using fuzzingserver {}", addr);
 	println!("Using agent {}", agent);
 
-	let case_count = get_case_count(addr.clone(), &mut core);
+	let case_count = get_case_count(addr.clone());
 	println!("We will be running {} test cases!", case_count);
 
 	println!("Running test suite...");
@@ -30,96 +28,85 @@ fn main() {
 
 		let test_case = ClientBuilder::new(&url)
 			.unwrap()
-			.async_connect_insecure(&handle)
+			.async_connect_insecure(&Handle::default())
 			.and_then(move |(duplex, _)| {
 				println!("Executing test case: {}/{}", case_id, case_count);
 				future::loop_fn(duplex, |stream| {
 					stream.into_future()
-						.or_else(|(err, stream)| {
-							println!("Could not receive message: {:?}", err);
-							stream.send(OwnedMessage::Close(None)).map(|s| (None, s))
-						})
-						.and_then(|(msg, stream)| {
-							match msg {
-								Some(OwnedMessage::Text(txt)) => {
-									Box::new(
-										stream.send(OwnedMessage::Text(txt))
-											.map(|s| Loop::Continue(s))
-									)
-										as BoxFuture<_, _>
-								}
-								Some(OwnedMessage::Binary(bin)) => {
-									Box::new(
-										stream.send(OwnedMessage::Binary(bin))
-											.map(|s| Loop::Continue(s))
-									)
-										as BoxFuture<_, _>
-								}
-								Some(OwnedMessage::Ping(data)) => {
-									Box::new(
-										stream.send(OwnedMessage::Pong(data))
-											.map(|s| Loop::Continue(s))
-									)
-										as BoxFuture<_, _>
-								}
-								Some(OwnedMessage::Pong(_)) => {
-									Box::new(future::ok(Loop::Continue(stream)))
-										as BoxFuture<_, _>
-								},
-								Some(OwnedMessage::Close(_)) => {
-									Box::new(
-										stream.send(OwnedMessage::Close(None))
-											.map(|_| Loop::Break(()))
-									)
-										as BoxFuture<_, _>
-								}
-								None => {
-									Box::new(future::ok(Loop::Break(())))
-										as BoxFuture<_, _>
-								}
+					      .or_else(|(err, stream)| {
+						println!("Could not receive message: {:?}", err);
+						stream.send(OwnedMessage::Close(None)).map(|s| (None, s))
+					})
+					      .and_then(|(msg, stream)| -> BoxFuture<_, _> {
+						match msg {
+							Some(OwnedMessage::Text(txt)) => {
+								Box::new(stream.send(OwnedMessage::Text(txt)).map(
+									|s| Loop::Continue(s),
+								))
 							}
-						})
+							Some(OwnedMessage::Binary(bin)) => {
+								Box::new(stream.send(OwnedMessage::Binary(bin)).map(
+									|s| Loop::Continue(s),
+								))
+							}
+							Some(OwnedMessage::Ping(data)) => {
+								Box::new(stream.send(OwnedMessage::Pong(data)).map(
+									|s| Loop::Continue(s),
+								))
+							}
+							Some(OwnedMessage::Pong(_)) => {
+								Box::new(future::ok(Loop::Continue(stream)))
+							}
+							Some(OwnedMessage::Close(_)) => {
+								Box::new(stream.send(OwnedMessage::Close(None)).map(
+									|_| Loop::Break(()),
+								))
+							}
+							None => Box::new(future::ok(Loop::Break(()))),
+						}
+					})
 				})
 			})
 			.map(move |_| {
-				     println!("Test case {} is finished!", case_id);
-				    })
+				println!("Test case {} is finished!", case_id);
+			})
 			.or_else(move |err| {
-				         println!("Test case {} ended with an error: {:?}", case_id, err);
-				         Ok(()) as Result<(), ()>
-				        });
+				println!("Test case {} ended with an error: {:?}", case_id, err);
+				Ok(()) as Result<(), ()>
+			});
 
-		core.run(test_case).ok();
+		tokio::run(test_case.map(|_| ()).map_err(|_| ()));
 	}
 
-	update_reports(addr.clone(), agent, &mut core);
+	update_reports(addr.clone(), agent);
 	println!("Test suite finished!");
 }
 
-fn get_case_count(addr: String, core: &mut Core) -> usize {
+fn get_case_count(addr: String) -> usize {
 	let url = addr + "/getCaseCount";
 	let err = "Unsupported message in /getCaseCount";
 
 	let counter = ClientBuilder::new(&url)
 		.unwrap()
-		.async_connect_insecure(&core.handle())
+		.async_connect_insecure(&Handle::default())
 		.and_then(|(s, _)| s.into_future().map_err(|e| e.0))
-		.and_then(|(msg, _)| match msg {
-		              Some(OwnedMessage::Text(txt)) => Ok(txt.parse().unwrap()),
-		              _ => Err(WebSocketError::ProtocolError(err)),
-		          });
-	core.run(counter).unwrap()
+		.and_then(move |(msg, _)| match msg {
+			Some(OwnedMessage::Text(txt)) => Ok(txt.parse().unwrap()),
+			_ => Err(WebSocketError::ProtocolError(err)),
+		});
+	tokio::run(counter.map(|_: String| ()).map_err(|_| ()));
+	0
 }
 
-fn update_reports(addr: String, agent: &str, core: &mut Core) {
+fn update_reports(addr: String, agent: &str) {
 	println!("Updating reports...");
 	let url = addr + "/updateReports?agent=" + agent;
 
 	let updater = ClientBuilder::new(&url)
 		.unwrap()
-		.async_connect_insecure(&core.handle())
+		.async_connect_insecure(&Handle::default())
 		.and_then(|(sink, _)| sink.send(OwnedMessage::Close(None)));
-	core.run(updater).unwrap();
+	tokio::run(updater.map(|_| ()).map_err(|_| ()));
 
 	println!("Reports updated.");
 }

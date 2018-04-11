@@ -28,24 +28,22 @@ impl Deref for WebSocketExtensions {
 impl FromStr for WebSocketExtensions {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(
-			WebSocketExtensions(
-				s.split(',')
-					.map(|s| s.trim().parse::<Extension>().unwrap())
-					.collect()
-			)
-		)
+		Ok(WebSocketExtensions(
+			s.split(',')
+			 .map(|s| s.trim().parse::<Extension>().unwrap())
+			 .collect(),
+		))
 	}
 }
 
 impl From<WebSocketExtensions> for HeaderValue {
 	fn from(extensions: WebSocketExtensions) -> Self {
-		HeaderValue::from_str(
-			&extensions.0.iter()
-				.map(|e| format!("{}", e))
-				.collect::<Vec<String>>()
-				.join(", ")
-		).unwrap()
+		HeaderValue::from_str(&extensions.0
+		           .iter()
+		           .map(|e| format!("{}", e))
+		           .collect::<Vec<String>>()
+		           .join(", "))
+		.unwrap()
 	}
 }
 
@@ -86,7 +84,7 @@ impl FromStr for Extension {
 					value: pair.next(),
 				}
 			})
-				.collect(),
+			           .collect(),
 		})
 	}
 }
@@ -164,14 +162,16 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(extensions);
 
-		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Extensions: foo, bar; baz; qux=quux\r\n");
+		assert_eq!(
+			&headers.to_string()[..],
+			"Sec-WebSocket-Extensions: foo, bar; baz; qux=quux\r\n"
+		);
 	}
 	#[bench]
 	fn bench_header_extensions_parse(b: &mut test::Bencher) {
 		let value = vec![b"foo, bar; baz; qux=quux".to_vec()];
 		b.iter(|| {
-			let mut extensions: WebSocketExtensions = Header::parse_header(&value[..])
-				.unwrap();
+			let mut extensions: WebSocketExtensions = Header::parse_header(&value[..]).unwrap();
 			test::black_box(&mut extensions);
 		});
 	}

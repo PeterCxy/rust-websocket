@@ -45,12 +45,12 @@ impl FromStr for Connection {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Connection, ()> {
 		let options = s.split(',')
-			.filter_map(|x| match x.trim() {
-				"" => None,
-				y => Some(y),
-			})
-			.filter_map(|x| x.trim().parse().ok())
-			.collect();
+		               .filter_map(|x| match x.trim() {
+			"" => None,
+			y => Some(y),
+		})
+		               .filter_map(|x| x.trim().parse().ok())
+		               .collect();
 		Ok(Connection(options))
 	}
 }
@@ -68,11 +68,11 @@ impl Connection {
 
 impl From<Connection> for HeaderValue {
 	fn from(connection: Connection) -> Self {
-		HeaderValue::from_str(
-			&connection.0.iter()
-				.map(|o| format!("{}", o))
-				.collect::<Vec<String>>()
-				.join(", ")
-		).unwrap()
+		HeaderValue::from_str(&connection.0
+		           .iter()
+		           .map(|o| format!("{}", o))
+		           .collect::<Vec<String>>()
+		           .join(", "))
+		.unwrap()
 	}
 }

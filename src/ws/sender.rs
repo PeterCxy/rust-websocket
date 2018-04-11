@@ -16,8 +16,9 @@ pub trait Sender {
 
 	/// Sends a single data frame using this sender.
 	fn send_dataframe<D, W>(&mut self, writer: &mut W, dataframe: &D) -> WebSocketResult<()>
-		where D: DataFrame,
-		      W: Write
+	where
+		D: DataFrame,
+		W: Write,
 	{
 		dataframe.write_to(writer, self.is_masked())?;
 		Ok(())
@@ -25,8 +26,9 @@ pub trait Sender {
 
 	/// Sends a single message using this sender.
 	fn send_message<M, W>(&mut self, writer: &mut W, message: &M) -> WebSocketResult<()>
-		where M: Message,
-		      W: Write
+	where
+		M: Message,
+		W: Write,
 	{
 		message.serialize(writer, self.is_masked())?;
 		Ok(())

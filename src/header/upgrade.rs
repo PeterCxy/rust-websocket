@@ -53,7 +53,10 @@ pub struct Protocol {
 
 impl Protocol {
 	pub fn new(name: ProtocolName, version: Option<String>) -> Protocol {
-		Protocol { name: name, version: version }
+		Protocol {
+			name: name,
+			version: version,
+		}
 	}
 }
 
@@ -61,7 +64,10 @@ impl FromStr for Protocol {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Protocol, ()> {
 		let mut parts = s.splitn(2, '/');
-		Ok(Protocol::new(try!(parts.next().unwrap().parse()), parts.next().map(|x| x.to_owned())))
+		Ok(Protocol::new(
+			try!(parts.next().unwrap().parse()),
+			parts.next().map(|x| x.to_owned()),
+		))
 	}
 }
 
@@ -79,23 +85,23 @@ impl FromStr for Upgrade {
 	type Err = ();
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let protocols = s.split(',')
-			.filter_map(|x| match x.trim() {
-				"" => None,
-				y => Some(y),
-			})
-			.filter_map(|x| x.trim().parse().ok())
-			.collect();
+		                 .filter_map(|x| match x.trim() {
+			"" => None,
+			y => Some(y),
+		})
+		                 .filter_map(|x| x.trim().parse().ok())
+		                 .collect();
 		Ok(Upgrade(protocols))
 	}
 }
 
 impl From<Upgrade> for HeaderValue {
 	fn from(upgrade: Upgrade) -> Self {
-		HeaderValue::from_str(
-			&upgrade.0.iter()
-				.map(|p| format!("{}", p))
-				.collect::<Vec<String>>()
-				.join(", ")
-		).unwrap()
+		HeaderValue::from_str(&upgrade.0
+		        .iter()
+		        .map(|p| format!("{}", p))
+		        .collect::<Vec<String>>()
+		        .join(", "))
+		.unwrap()
 	}
 }

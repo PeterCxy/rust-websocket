@@ -15,7 +15,8 @@ pub use stream::sync::Shutdown;
 /// This reader bundles an existing stream with a parsing algorithm.
 /// It is used by the client in its `.split()` function as the reading component.
 pub struct Reader<R>
-	where R: Read
+where
+	R: Read,
 {
 	/// the stream to be read from
 	pub stream: BufReader<R>,
@@ -24,7 +25,8 @@ pub struct Reader<R>
 }
 
 impl<R> Reader<R>
-    where R: Read
+where
+	R: Read,
 {
 	/// Reads a single data frame from the remote endpoint.
 	pub fn recv_dataframe(&mut self) -> WebSocketResult<DataFrame> {
@@ -38,7 +40,8 @@ impl<R> Reader<R>
 
 	/// Reads a single message from this receiver.
 	pub fn recv_message<I>(&mut self) -> WebSocketResult<OwnedMessage>
-		where I: Iterator<Item = DataFrame>
+	where
+		I: Iterator<Item = DataFrame>,
 	{
 		self.receiver.recv_message(&mut self.stream)
 	}
@@ -51,7 +54,8 @@ impl<R> Reader<R>
 }
 
 impl<S> Reader<S>
-    where S: AsTcpStream + Stream + Read
+where
+	S: AsTcpStream + Stream + Read,
 {
 	/// Closes the receiver side of the connection, will cause all pending and future IO to
 	/// return immediately with an appropriate value.
@@ -91,20 +95,24 @@ impl ws::Receiver for Receiver {
 
 	/// Reads a single data frame from the remote endpoint.
 	fn recv_dataframe<R>(&mut self, reader: &mut R) -> WebSocketResult<DataFrame>
-		where R: Read
+	where
+		R: Read,
 	{
 		DataFrame::read_dataframe(reader, self.mask)
 	}
 
 	/// Returns the data frames that constitute one message.
 	fn recv_message_dataframes<R>(&mut self, reader: &mut R) -> WebSocketResult<Vec<DataFrame>>
-		where R: Read
+	where
+		R: Read,
 	{
 		let mut finished = if self.buffer.is_empty() {
 			let first = self.recv_dataframe(reader)?;
 
 			if first.opcode == Opcode::Continuation {
-				return Err(WebSocketError::ProtocolError("Unexpected continuation data frame opcode",),);
+				return Err(WebSocketError::ProtocolError(
+					"Unexpected continuation data frame opcode",
+				));
 			}
 
 			let finished = first.finished;
@@ -126,7 +134,11 @@ impl ws::Receiver for Receiver {
 					return Ok(vec![next]);
 				}
 				// Others
-				_ => return Err(WebSocketError::ProtocolError("Unexpected data frame opcode")),
+				_ => {
+					return Err(WebSocketError::ProtocolError(
+						"Unexpected data frame opcode",
+					))
+				}
 			}
 		}
 

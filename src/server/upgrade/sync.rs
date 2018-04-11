@@ -45,7 +45,8 @@ pub type Upgrade<S> = WsUpgrade<S, Option<Buffer>>;
 /// These methods are the synchronous ways of accepting and rejecting a websocket
 /// handshake.
 impl<S> WsUpgrade<S, Option<Buffer>>
-	where S: Stream + Send
+where
+	S: Stream + Send,
 {
 	/// Accept the handshake request and send a response,
 	/// if nothing goes wrong a client will be created.
@@ -67,7 +68,12 @@ impl<S> WsUpgrade<S, Option<Buffer>>
 			return Err((self.stream, e));
 		}
 
-		Ok(Client::unchecked(BufReader::new(self.stream), self.headers, false, true))
+		Ok(Client::unchecked(
+			BufReader::new(self.stream),
+			self.headers,
+			false,
+			true,
+		))
 	}
 
 	/// Reject the client's request to make a websocket connection.
@@ -93,7 +99,9 @@ impl<S> WsUpgrade<S, Option<Buffer>>
 }
 
 impl<S, B> WsUpgrade<S, B>
-	where S: Stream + AsTcpStream + Send, B: Send
+where
+	S: Stream + AsTcpStream + Send,
+	B: Send,
 {
 	/// Get a handle to the underlying TCP stream, useful to be able to set
 	/// TCP options, etc.
@@ -149,7 +157,8 @@ pub trait IntoWs {
 }
 
 impl<S> IntoWs for S
-    where S: Stream + Send
+where
+	S: Stream + Send,
 {
 	type Stream = S;
 	type Error = (S, Option<RequestHead>, Option<Buffer>, HyperIntoWsError);
@@ -164,17 +173,17 @@ impl<S> IntoWs for S
 		let buf2 = buf.clone();
 
 		let mut parse = httparse::Request::new(&mut []);
-		
+
 		let stream = reader.into_inner();
 
 		match parse.parse(buf2.as_bytes()) {
-			Ok(o) => match o {
-				httparse::Status::Complete(_) => {},
-				_ => return Err((stream, None, None, ::httparse::Error::HeaderValue.into())),
+			Ok(o) => {
+				match o {
+					httparse::Status::Complete(_) => {}
+					_ => return Err((stream, None, None, ::httparse::Error::HeaderValue.into())),
+				}
 			}
-			Err(e) => {
-				return Err((stream, None, None, e.into()))
-			}
+			Err(e) => return Err((stream, None, None, e.into())),
 		}
 
 		let cap = buf.len();
@@ -189,16 +198,22 @@ impl<S> IntoWs for S
 			version: match parse.version {
 				Some(0) => http::Version::HTTP_10,
 				Some(1) => http::Version::HTTP_11,
-				Some(_) | None => return Err((stream, None, buffer, httparse::Error::Version.into())),
+				Some(_) | None => {
+					return Err((stream, None, buffer, httparse::Error::Version.into()))
+				}
 			},
 			subject: RequestLine(
 				match parse.method.unwrap().parse() {
 					Ok(method) => method,
-					Err(e) => return Err((stream, None, buffer, httparse::Error::HeaderValue.into())),
+					Err(e) => {
+						return Err((stream, None, buffer, httparse::Error::HeaderValue.into()))
+					}
 				},
 				match parse.path.unwrap().parse() {
 					Ok(path) => path,
-					Err(e) => return Err((stream, None, buffer, httparse::Error::HeaderValue.into())),
+					Err(e) => {
+						return Err((stream, None, buffer, httparse::Error::HeaderValue.into()))
+					}
 				},
 			),
 			headers: HeaderMap::new(),
@@ -219,7 +234,8 @@ impl<S> IntoWs for S
 }
 
 impl<S> IntoWs for RequestStreamPair<S>
-    where S: Stream + Send
+where
+	S: Stream + Send,
 {
 	type Stream = S;
 	type Error = (S, RequestHead, HyperIntoWsError);
@@ -279,7 +295,7 @@ impl<S> IntoWs for RequestStreamPair<S>
 //// .unwrap();
 //// # }
 //// ```
-pub struct HyperRequest();//pub ::hyper::server::Request);
+pub struct HyperRequest(); //pub ::hyper::server::Request);
 
 /*impl IntoWs for HyperRequest {
 	type Stream = &'static mut Body;

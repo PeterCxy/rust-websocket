@@ -37,7 +37,9 @@ impl From<WebSocketVersion> for HeaderValue {
 	fn from(version: WebSocketVersion) -> HeaderValue {
 		match &version {
 			&WebSocketVersion::WebSocket13 => HeaderValue::from_str("13").unwrap(),
-			&WebSocketVersion::Unknown(ref version) => HeaderValue::from_str(&version.to_owned()).unwrap(),
+			&WebSocketVersion::Unknown(ref version) => {
+				HeaderValue::from_str(&version.to_owned()).unwrap()
+			}
 		}
 	}
 }

@@ -14,23 +14,21 @@
 //! # Example with Type Annotations
 //!
 //! ```rust,no_run
-//! # extern crate tokio_core;
 //! # extern crate futures;
+//! # extern crate tokio;
 //! # extern crate websocket;
+//! use tokio::reactor::Handle;
 //! use websocket::ClientBuilder;
 //! use websocket::async::client::{Client, ClientNew};
 //! use websocket::async::TcpStream;
 //! use websocket::futures::{Future, Stream, Sink};
 //! use websocket::Message;
-//! use tokio_core::reactor::Core;
 //! # fn main() {
-//!
-//! let mut core = Core::new().unwrap();
 //!
 //! // create a Future of a client
 //! let client_future: ClientNew<TcpStream> =
 //!     ClientBuilder::new("ws://echo.websocket.org").unwrap()
-//!         .async_connect_insecure(&core.handle());
+//!         .async_connect_insecure(&Handle::default());
 //!
 //! // send a message
 //! let send_future = client_future
@@ -40,7 +38,7 @@
 //!         client.send(Message::text("hallo").into())
 //!     });
 //!
-//! core.run(send_future).unwrap();
+//! tokio::run(send_future.map(|_| ()).map_err(|_| ()));
 //! # }
 //! ```
 
@@ -54,7 +52,7 @@ use result::WebSocketError;
 use codec::ws::MessageCodec;
 use message::OwnedMessage;
 
-#[cfg(feature="async-ssl")]
+#[cfg(feature = "async-ssl")]
 pub use tokio_tls::TlsStream;
 
 /// An asynchronous websocket client.
@@ -62,7 +60,7 @@ pub use tokio_tls::TlsStream;
 /// This is simply a `Stream` and `Sink` of `OwnedMessage`s.
 /// See the docs for `Stream` and `Sink` to learn more about how to use
 /// these futures.
-pub type Client<S> = Framed<S, MessageCodec<OwnedMessage>>;
+pub type Client<S: Send> = Framed<S, MessageCodec<OwnedMessage>>;
 
 /// A future which will evaluate to a `Client` and a set of hyper `Headers`.
 ///
@@ -72,4 +70,7 @@ pub type Client<S> = Framed<S, MessageCodec<OwnedMessage>>;
 /// headers to see if the server accepted the protocol or other custom header.
 /// This crate will not automatically close the connection if the server refused
 /// to use the user protocols given to it, you must check that the server accepted.
-pub type ClientNew<S> = Box<Future<Item = (Client<S>, HeaderMap), Error = WebSocketError>>;
+pub type ClientNew<S: Send> = Box<
+	Future<Item = (Client<S>, HeaderMap), Error = WebSocketError>
+		+ Send,
+>;

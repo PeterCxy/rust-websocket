@@ -57,17 +57,23 @@ impl<'a> Message<'a> {
 
 	/// Create a new WebSocket message with text data
 	pub fn text<S>(data: S) -> Self
-		where S: Into<Cow<'a, str>>
+	where
+		S: Into<Cow<'a, str>>,
 	{
-		Message::new(Type::Text, None, match data.into() {
-			Cow::Owned(msg) => Cow::Owned(msg.into_bytes()),
-			Cow::Borrowed(msg) => Cow::Borrowed(msg.as_bytes()),
-		})
+		Message::new(
+			Type::Text,
+			None,
+			match data.into() {
+				Cow::Owned(msg) => Cow::Owned(msg.into_bytes()),
+				Cow::Borrowed(msg) => Cow::Borrowed(msg.as_bytes()),
+			},
+		)
 	}
 
 	/// Create a new WebSocket message with binary data
 	pub fn binary<B>(data: B) -> Self
-		where B: IntoCowBytes<'a>
+	where
+		B: IntoCowBytes<'a>,
 	{
 		Message::new(Type::Binary, None, data.into())
 	}
@@ -82,18 +88,24 @@ impl<'a> Message<'a> {
 	/// connection and provide a text reason and a status code for why.
 	/// Messages can still be sent after sending this message.
 	pub fn close_because<S>(code: u16, reason: S) -> Self
-		where S: Into<Cow<'a, str>>
+	where
+		S: Into<Cow<'a, str>>,
 	{
-		Message::new(Type::Close, Some(code), match reason.into() {
-			Cow::Owned(msg) => Cow::Owned(msg.into_bytes()),
-			Cow::Borrowed(msg) => Cow::Borrowed(msg.as_bytes()),
-		})
+		Message::new(
+			Type::Close,
+			Some(code),
+			match reason.into() {
+				Cow::Owned(msg) => Cow::Owned(msg.into_bytes()),
+				Cow::Borrowed(msg) => Cow::Borrowed(msg.as_bytes()),
+			},
+		)
 	}
 
 	/// Create a ping WebSocket message, a pong is usually sent back
 	/// after sending this with the same data
 	pub fn ping<P>(data: P) -> Self
-		where P: IntoCowBytes<'a>
+	where
+		P: IntoCowBytes<'a>,
 	{
 		Message::new(Type::Ping, None, data.into())
 	}
@@ -101,7 +113,8 @@ impl<'a> Message<'a> {
 	/// Create a pong WebSocket message, usually a response to a
 	/// ping message
 	pub fn pong<P>(data: P) -> Self
-		where P: IntoCowBytes<'a>
+	where
+		P: IntoCowBytes<'a>,
 	{
 		Message::new(Type::Pong, None, data.into())
 	}
@@ -149,8 +162,7 @@ impl<'a> ws::dataframe::DataFrame for Message<'a> {
 	fn take_payload(self) -> Vec<u8> {
 		if let Some(reason) = self.cd_status_code {
 			let mut buf = Vec::with_capacity(2 + self.payload.len());
-			buf.write_u16::<BigEndian>(reason)
-			   .expect("failed to write close code in take_payload");
+			buf.write_u16::<BigEndian>(reason).expect("failed to write close code in take_payload");
 			buf.append(&mut self.payload.into_owned());
 			buf
 		} else {
@@ -172,10 +184,11 @@ impl<'a> ws::Message for Message<'a> {
 
 	/// Attempt to form a message from a series of data frames
 	fn from_dataframes<D>(frames: Vec<D>) -> WebSocketResult<Self>
-		where D: DataFrameTrait
+	where
+		D: DataFrameTrait,
 	{
 		let opcode = frames.first()
-		                   .ok_or(WebSocketError::ProtocolError("No dataframes provided",),)
+		                   .ok_or(WebSocketError::ProtocolError("No dataframes provided"))
 		                   .map(|d| d.opcode())?;
 
 		let opcode = Opcode::new(opcode);
@@ -186,10 +199,14 @@ impl<'a> ws::Message for Message<'a> {
 
 		for (i, dataframe) in frames.into_iter().enumerate() {
 			if i > 0 && dataframe.opcode() != Opcode::Continuation as u8 {
-				return Err(WebSocketError::ProtocolError("Unexpected non-continuation data frame"));
+				return Err(WebSocketError::ProtocolError(
+					"Unexpected non-continuation data frame",
+				));
 			}
 			if *dataframe.reserved() != [false; 3] {
-				return Err(WebSocketError::ProtocolError("Unsupported reserved bits received"));
+				return Err(WebSocketError::ProtocolError(
+					"Unsupported reserved bits received",
+				));
 			}
 			data.append(&mut dataframe.take_payload());
 		}
@@ -339,7 +356,8 @@ impl ws::Message for OwnedMessage {
 
 	/// Attempt to form a message from a series of data frames
 	fn from_dataframes<D>(frames: Vec<D>) -> WebSocketResult<Self>
-		where D: DataFrameTrait
+	where
+		D: DataFrameTrait,
 	{
 		Ok(Message::from_dataframes(frames)?.into())
 	}
@@ -411,8 +429,9 @@ impl ws::dataframe::DataFrame for OwnedMessage {
 				match data {
 					Some(c) => {
 						let mut buf = Vec::with_capacity(2 + c.reason.len());
-						buf.write_u16::<BigEndian>(c.status_code)
-						   .expect("failed to write close code in take_payload");
+						buf.write_u16::<BigEndian>(c.status_code).expect(
+							"failed to write close code in take_payload",
+						);
 						buf.append(&mut c.reason.into_bytes());
 						buf
 					}
@@ -434,11 +453,9 @@ impl<'m> From<Message<'m>> for OwnedMessage {
 				match message.cd_status_code {
 					Some(code) => {
 						OwnedMessage::Close(Some(CloseData {
-						                             status_code: code,
-						                             reason:
-							                             String::from_utf8_lossy(&message.payload)
-							                                 .into_owned(),
-						                         }))
+							status_code: code,
+							reason: String::from_utf8_lossy(&message.payload).into_owned(),
+						}))
 					}
 					None => OwnedMessage::Close(None),
 				}

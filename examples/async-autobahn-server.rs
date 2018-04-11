@@ -51,9 +51,7 @@ fn main() {
             Ok(())
         });
 
-    current_thread::spawn(f.map_err(|_| ()));
+	current_thread::spawn(f.map_err(|_| ()));
 
-    tokio::run(loop_fn((), |acc| {
-        Ok(Loop::Continue(acc))
-    }));
+	tokio::run(loop_fn((), |acc| Ok(Loop::Continue(acc))));
 }

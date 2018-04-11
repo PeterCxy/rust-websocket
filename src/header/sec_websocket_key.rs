@@ -26,7 +26,9 @@ impl FromStr for WebSocketKey {
 		match base64::decode(key) {
 			Ok(vec) => {
 				if vec.len() != 16 {
-					return Err(WebSocketError::ProtocolError("Sec-WebSocket-Key must be 16 bytes"));
+					return Err(WebSocketError::ProtocolError(
+						"Sec-WebSocket-Key must be 16 bytes",
+					));
 				}
 				let mut array = [0u8; 16];
 				let mut iter = vec.into_iter();
@@ -36,7 +38,9 @@ impl FromStr for WebSocketKey {
 
 				Ok(WebSocketKey(array))
 			}
-			Err(_) => Err(WebSocketError::ProtocolError("Invalid Sec-WebSocket-Accept")),
+			Err(_) => Err(WebSocketError::ProtocolError(
+				"Invalid Sec-WebSocket-Accept",
+			)),
 		}
 	}
 }
@@ -99,7 +103,10 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(extensions);
 
-		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Key: QUFBQUFBQUFBQUFBQUFBQQ==\r\n");
+		assert_eq!(
+			&headers.to_string()[..],
+			"Sec-WebSocket-Key: QUFBQUFBQUFBQUFBQUFBQQ==\r\n"
+		);
 	}
 	#[bench]
 	fn bench_header_key_new(b: &mut test::Bencher) {

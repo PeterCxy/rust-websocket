@@ -27,7 +27,8 @@ use std::fmt::Debug;
 type Id = u32;
 
 fn main() {
-	let server = Server::bind("localhost:8081", &Handle::current()).expect("Failed to create server");
+	let server =
+		Server::bind("localhost:8081", &Handle::current()).expect("Failed to create server");
 	let pool = Rc::new(CpuPool::new_num_cpus());
 	let connections = Arc::new(RwLock::new(HashMap::new()));
 	let (receive_channel_out, receive_channel_in) = mpsc::unbounded();
@@ -35,8 +36,7 @@ fn main() {
 	let conn_id = Rc::new(RefCell::new(Counter::new()));
 	let connections_inner = connections.clone();
 	// Handle new connection
-	let connection_handler =
-		server.incoming()
+	let connection_handler = server.incoming()
         // we don't wanna save the stream if it drops
         .map_err(|InvalidConnection { error, .. }| error)
         .for_each(move |(upgrade, addr)| {
@@ -69,12 +69,12 @@ fn main() {
 	let receive_handler = pool.spawn_fn(|| {
 		receive_channel_in.for_each(move |(id, stream)| {
 			current_thread::spawn(futures::future::lazy(move || {
-				                   stream.for_each(move |msg| {
-					                                   process_message(id, &msg);
-					                                   Ok(())
-					                                  })
-				                         .map_err(|_| ())
-				                  }));
+				stream.for_each(move |msg| {
+					process_message(id, &msg);
+					Ok(())
+				})
+				      .map_err(|_| ())
+			}));
 			Ok(())
 		})
 	});
@@ -89,17 +89,15 @@ fn main() {
 		let remote = remote_inner.clone();
 		send_channel_in.for_each(move |(id, msg): (Id, String)| {
 			let connections = connections.clone();
-			let sink = connections.write()
-			                      .unwrap()
-			                      .remove(&id)
-			                      .expect("Tried to send to invalid client id",);
+			let sink = connections.write().unwrap().remove(&id).expect(
+				"Tried to send to invalid client id",
+			);
 
 			println!("Sending message '{}' to id {}", msg, id);
-			let f = sink.send(OwnedMessage::Text(msg))
-			            .and_then(move |sink| {
-				                      connections.write().unwrap().insert(id, sink);
-				                      Ok(())
-				                     });
+			let f = sink.send(OwnedMessage::Text(msg)).and_then(move |sink| {
+				connections.write().unwrap().insert(id, sink);
+				Ok(())
+			});
 			current_thread::spawn(futures::future::lazy(move || f.map_err(|_| ())));
 			Ok(())
 		})
@@ -111,7 +109,11 @@ fn main() {
 		future::loop_fn(send_channel_out, move |send_channel_out| {
 			thread::sleep(Duration::from_millis(100));
 
-			let should_continue = update(connections.clone(), send_channel_out.clone(), &Handle::current());
+			let should_continue = update(
+				connections.clone(),
+				send_channel_out.clone(),
+				&Handle::current(),
+			);
 			match should_continue {
 				Ok(true) => Ok(Loop::Continue(send_channel_out)),
 				Ok(false) => Ok(Loop::Break(())),
@@ -120,21 +122,25 @@ fn main() {
 		})
 	});
 
-	let handlers = main_loop.select2(connection_handler.select2(receive_handler.select(send_handler)));
+	let handlers = main_loop.select2(connection_handler.select2(
+		receive_handler.select(send_handler),
+	));
 
 	current_thread::spawn(handlers.map(|_| ()).map_err(|_| ()));
 
-	tokio::run(loop_fn((), |acc| {
-		Ok(Loop::Continue(acc))
-	}));
+	tokio::run(loop_fn((), |acc| Ok(Loop::Continue(acc))));
 }
 
 fn spawn_future<F, I, E>(f: F, desc: &'static str, handle: &Handle)
-	where F: Future<Item = I, Error = E> + 'static,
-	      E: Debug
+where
+	F: Future<Item = I, Error = E> + 'static,
+	E: Debug,
 {
-	current_thread::spawn(f.map_err(move |e| println!("Error in {}: '{:?}'", desc, e))
-	              .map(move |_| println!("{}: Finished.", desc)));
+	current_thread::spawn(
+		f.map_err(move |e| println!("Error in {}: '{:?}'", desc, e)).map(move |_| {
+			println!("{}: Finished.", desc)
+		}),
+	);
 }
 
 
@@ -144,8 +150,10 @@ fn process_message(id: u32, msg: &OwnedMessage) {
 	}
 }
 
-type SinkContent = websocket::client::async::Framed<tokio::net::TcpStream,
-                                                    websocket::async::MessageCodec<OwnedMessage>>;
+type SinkContent = websocket::client::async::Framed<
+	tokio::net::TcpStream,
+	websocket::async::MessageCodec<OwnedMessage>,
+>;
 type SplitSink = futures::stream::SplitSink<SinkContent>;
 // Represents one tick in the main loop
 fn update(
@@ -154,12 +162,12 @@ fn update(
 	remote: &Handle,
 ) -> Result<bool, ()> {
 	current_thread::spawn(futures::future::lazy(move || {
-		             for (id, _) in connections.read().unwrap().iter() {
-			             let f = channel.clone().send((*id, "Hi there!".to_owned()));
-			             spawn_future(f, "Send message to write handler", &Handle::current());
-			            }
-		             Ok(())
-		            }));
+		for (id, _) in connections.read().unwrap().iter() {
+			let f = channel.clone().send((*id, "Hi there!".to_owned()));
+			spawn_future(f, "Send message to write handler", &Handle::current());
+		}
+		Ok(())
+	}));
 	Ok(true)
 }
 

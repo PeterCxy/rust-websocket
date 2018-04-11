@@ -26,7 +26,9 @@ impl FromStr for WebSocketAccept {
 		match base64::decode(accept) {
 			Ok(vec) => {
 				if vec.len() != 20 {
-					return Err(WebSocketError::ProtocolError("Sec-WebSocket-Accept must be 20 bytes",),);
+					return Err(WebSocketError::ProtocolError(
+						"Sec-WebSocket-Accept must be 20 bytes",
+					));
 				}
 				let mut array = [0u8; 20];
 				let mut iter = vec.into_iter();
@@ -35,7 +37,9 @@ impl FromStr for WebSocketAccept {
 				}
 				Ok(WebSocketAccept(array))
 			}
-			Err(_) => Err(WebSocketError::ProtocolError("Invalid Sec-WebSocket-Accept")),
+			Err(_) => Err(WebSocketError::ProtocolError(
+				"Invalid Sec-WebSocket-Accept",
+			)),
 		}
 	}
 }
@@ -97,7 +101,10 @@ mod tests {
 		let mut headers = Headers::new();
 		headers.set(accept);
 
-		assert_eq!(&headers.to_string()[..], "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n");
+		assert_eq!(
+			&headers.to_string()[..],
+			"Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"
+		);
 	}
 	#[bench]
 	fn bench_header_accept_new(b: &mut test::Bencher) {

@@ -14,7 +14,7 @@ use httparse::{self, Request};
 use hyper;
 use tokio_io::codec::{Decoder, Encoder};
 
-#[cfg(any(feature="sync", feature="async"))]
+#[cfg(any(feature = "sync", feature = "async"))]
 use http::Version;
 
 pub const MAX_HEADERS: usize = 100;
@@ -42,7 +42,11 @@ pub struct HeaderIndices {
 	pub value: (usize, usize),
 }
 
-pub fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices: &mut [HeaderIndices]) {
+pub fn record_header_indices(
+	bytes: &[u8],
+	headers: &[httparse::Header],
+	indices: &mut [HeaderIndices],
+) {
 	let bytes_ptr = bytes.as_ptr() as usize;
 	for (header, indices) in headers.iter().zip(indices.iter_mut()) {
 		let name_start = header.name.as_ptr() as usize - bytes_ptr;
@@ -55,8 +59,8 @@ pub fn record_header_indices(bytes: &[u8], headers: &[httparse::Header], indices
 }
 
 pub struct HeadersAsBytesIter<'a> {
-    pub headers: ::std::slice::Iter<'a, HeaderIndices>,
-    pub slice: Bytes,
+	pub headers: ::std::slice::Iter<'a, HeaderIndices>,
+	pub slice: Bytes,
 }
 
 impl<'a> Iterator for HeadersAsBytesIter<'a> {
@@ -66,16 +70,14 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
 			let name = unsafe {
 				let bytes = ::std::slice::from_raw_parts(
 					self.slice.as_ref().as_ptr().offset(header.name.0 as isize),
-					header.name.1 - header.name.0
+					header.name.1 - header.name.0,
 				);
 				::std::str::from_utf8_unchecked(bytes)
 			};
-			let name = HeaderName::from_bytes(name.as_bytes())
-				.expect("header name already validated");
+			let name =
+				HeaderName::from_bytes(name.as_bytes()).expect("header name already validated");
 			let value = unsafe {
-				HeaderValue::from_shared_unchecked(
-					self.slice.slice(header.value.0, header.value.1)
-				)
+				HeaderValue::from_shared_unchecked(self.slice.slice(header.value.0, header.value.1))
 			};
 			(name, value)
 		})
@@ -89,25 +91,23 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
 ///
 ///# Example
 ///```rust,no_run
-///# extern crate tokio_core;
 ///# extern crate tokio_io;
+///# extern crate tokio;
 ///# extern crate websocket;
 ///# extern crate http;
 ///# extern crate hyper;
 ///use websocket::async::HttpClientCodec;
 ///use websocket::codec::http::MessageHead;
 ///# use websocket::async::futures::{Future, Sink, Stream};
-///# use tokio_core::net::TcpStream;
-///# use tokio_core::reactor::Core;
+///# use tokio::net::TcpStream;
 ///# use tokio_io::AsyncRead;
 ///# use http::{Method, Uri, Version};
 ///# use http::header::HeaderMap;
 ///
 ///# fn main() {
-///let mut core = Core::new().unwrap();
 ///let addr = "crouton.net".parse().unwrap();
 ///
-///let f = TcpStream::connect(&addr, &core.handle())
+///let f = TcpStream::connect(&addr)
 ///    .and_then(|s| {
 ///        Ok(s.framed(HttpClientCodec))
 ///    })
@@ -122,7 +122,7 @@ impl<'a> Iterator for HeadersAsBytesIter<'a> {
 ///    .and_then(|s| s.into_future().map_err(|(e, _)| e))
 ///    .map(|(m, _)| println!("You got a crouton: {:?}", m));
 ///
-///core.run(f).unwrap();
+///tokio::run(f.map(|_| ()).map_err(|_| ()));
 ///# }
 ///```
 pub struct HttpClientCodec;
@@ -135,12 +135,12 @@ fn split_off_http(src: &mut BytesMut) -> Option<BytesMut> {
 }
 
 fn write_headers(headers: &HeaderMap, dst: &mut BytesMut) {
-    for (name, value) in headers {
-        dst.extend(name.as_str().as_bytes());
-        dst.extend(b": ");
-        dst.extend(value.as_bytes());
-        dst.extend(b"\r\n");
-    }
+	for (name, value) in headers {
+		dst.extend(name.as_str().as_bytes());
+		dst.extend(b": ");
+		dst.extend(value.as_bytes());
+		dst.extend(b"\r\n");
+	}
 }
 
 impl Encoder for HttpClientCodec {
@@ -149,11 +149,13 @@ impl Encoder for HttpClientCodec {
 
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
 		// TODO: optomize this!
-		let request = format!("{} {} {:?}\r\n{:?}\r\n",
+		let request = format!(
+			"{} {} {:?}\r\n{:?}\r\n",
 			item.subject.0,
 			item.subject.1,
 			item.version,
-			item.headers);
+			item.headers
+		);
 		let byte_len = request.as_bytes().len();
 		if byte_len > dst.remaining_mut() {
 			dst.reserve(byte_len);
@@ -174,7 +176,7 @@ impl Decoder for HttpClientCodec {
 
 		let mut headers_indices = [HeaderIndices {
 			name: (0, 0),
-			value: (0, 0)
+			value: (0, 0),
 		}; MAX_HEADERS];
 
 		let (len, code, reason, version, headers_len) = {
@@ -186,10 +188,12 @@ impl Decoder for HttpClientCodec {
 				httparse::Status::Complete(len) => {
 					//trace!("Response.parse Complete({})", len);
 					let code = res.code.unwrap();
-					let status = try!(StatusCode::from_u16(code).map_err(|_| httparse::Error::Status));
+					let status = try!(StatusCode::from_u16(code).map_err(
+						|_| httparse::Error::Status,
+					));
 					let reason = match status.canonical_reason() {
 						Some(reason) if reason == res.reason.unwrap() => Cow::Borrowed(reason),
-						_ => Cow::Owned(res.reason.unwrap().to_owned())
+						_ => Cow::Owned(res.reason.unwrap().to_owned()),
 					};
 					let version = if res.version.unwrap() == 1 {
 						Version::HTTP_11
@@ -199,7 +203,7 @@ impl Decoder for HttpClientCodec {
 					record_header_indices(bytes, &res.headers, &mut headers_indices);
 					let headers_len = res.headers.len();
 					(len, code, reason, version, headers_len)
-				},
+				}
 				httparse::Status::Partial => return Ok(None),
 			}
 		};
@@ -233,7 +237,7 @@ impl Decoder for HttpClientCodec {
 ///# Example
 ///
 ///```rust,no_run
-///# extern crate tokio_core;
+///# extern crate tokio;
 ///# extern crate tokio_io;
 ///# extern crate websocket;
 ///# extern crate http;
@@ -242,17 +246,15 @@ impl Decoder for HttpClientCodec {
 ///use websocket::async::HttpServerCodec;
 ///# use websocket::codec::http::MessageHead;
 ///# use websocket::async::futures::{Future, Sink, Stream};
-///# use tokio_core::net::TcpStream;
-///# use tokio_core::reactor::Core;
+///# use tokio::net::TcpStream;
 ///# use tokio_io::AsyncRead;
 ///# use http::header::HeaderMap;
 ///# use http::{Method, StatusCode, Uri, Version};
 ///# fn main() {
 ///
-///let mut core = Core::new().unwrap();
 ///let addr = "nothing-to-see-here.com".parse().unwrap();
 ///
-///let f = TcpStream::connect(&addr, &core.handle())
+///let f = TcpStream::connect(&addr)
 ///   .map(|s| s.framed(HttpServerCodec))
 ///   .map_err(|e| e.into())
 ///   .and_then(|s| s.into_future().map_err(|(e, _)| e))
@@ -270,7 +272,7 @@ impl Decoder for HttpClientCodec {
 ///           .map_err(|e| e.into())
 ///   });
 ///
-///core.run(f).unwrap();
+///tokio::run(f.map(|_| ()).map_err(|_| ()));
 ///# }
 ///```
 #[derive(Copy, Clone, Debug)]
@@ -281,7 +283,9 @@ impl Encoder for HttpServerCodec {
 	type Error = io::Error;
 
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-		dst.extend(format!("{:?} {}\r\n", item.version, item.subject).as_bytes());
+		dst.extend(
+			format!("{:?} {}\r\n", item.version, item.subject).as_bytes(),
+		);
 		write_headers(&item.headers, dst);
 		dst.extend(b"\r\n");
 		Ok(())
@@ -304,7 +308,7 @@ impl Decoder for HttpServerCodec {
 
 				let mut headers_indices = [HeaderIndices {
 					name: (0, 0),
-					value: (0, 0)
+					value: (0, 0),
 				}; MAX_HEADERS];
 
 				let (len, method, path, version, headers_len) = {
@@ -340,10 +344,7 @@ impl Decoder for HttpServerCodec {
 
 				// path was found to be utf8 by httparse
 				let path = Uri::from_shared(path)?;
-				let subject = RequestLine(
-					method,
-					path,
-				);
+				let subject = RequestLine(method, path);
 
 				headers.extend(HeadersAsBytesIter {
 					headers: headers_indices[..headers_len].iter(),
@@ -376,8 +377,8 @@ pub enum HttpCodecError {
 	Uri,
 	/// An invalid `Header`.
 	Header,
-    /// A message head is too large to be reasonable.
-    TooLarge,
+	/// A message head is too large to be reasonable.
+	TooLarge,
 	/// An invalid `Status`, such as `1337 ELITE`.
 	Status,
 	/// An error that occurs during the writing or reading of HTTP data
@@ -418,8 +419,8 @@ impl From<io::Error> for HttpCodecError {
 	}
 }
 
-impl From<httparse::Error> for  HttpCodecError {
-    fn from(err: httparse::Error) ->  HttpCodecError {
+impl From<httparse::Error> for HttpCodecError {
+	fn from(err: httparse::Error) -> HttpCodecError {
 		match err {
 			httparse::Error::HeaderName |
 			httparse::Error::HeaderValue |
@@ -449,15 +450,14 @@ mod tests {
 	use super::*;
 	use std::io::Cursor;
 	use stream::ReadWritePair;
-	use tokio_core::reactor::Core;
 	use futures::{Stream, Sink, Future};
+	use tokio;
 	use tokio_io::AsyncRead;
 	use http::Version;
 	use http::header::HeaderMap;
 
 	#[test]
 	fn test_client_http_codec() {
-		let mut core = Core::new().unwrap();
 		let response = "HTTP/1.1 404 Not Found\r\n\r\npssst extra data here";
 		let input = Cursor::new(response.as_bytes());
 		let output = Cursor::new(Vec::new());
@@ -475,18 +475,17 @@ mod tests {
 				Some(ref m) if m.subject == StatusCode::NOT_FOUND => Ok(()),
 				_ => Err(io::Error::new(io::ErrorKind::Other, "test failed").into()),
 			});
-		core.run(f).unwrap();
+		tokio::run(f.map_err(|_| ()));
 	}
 
 	#[test]
 	fn test_server_http_codec() {
-		let mut core = Core::new().unwrap();
 		let request = "\
 			GET / HTTP/1.0\r\n\
 			Host: www.rust-lang.org\r\n\
 			\r\n\
 			"
-			.as_bytes();
+		              .as_bytes();
 		let input = Cursor::new(request);
 		let output = Cursor::new(Vec::new());
 
@@ -504,8 +503,8 @@ mod tests {
 					subject: StatusCode::NOT_FOUND,
 					headers: HeaderMap::new(),
 				})
-				.map_err(|e| e.into())
+				 .map_err(|e| e.into())
 			});
-		core.run(f).unwrap();
+		tokio::run(f.map(|_| ()).map_err(|_| ()));
 	}
 }

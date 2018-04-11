@@ -6,10 +6,7 @@ use std::io::{Read, Write};
 use std::str::{self, FromStr};
 
 use http::header::HeaderMap;
-use http::header::{
-	SEC_WEBSOCKET_EXTENSIONS,
-	SEC_WEBSOCKET_PROTOCOL
-};
+use http::header::{SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_PROTOCOL};
 use std::io::BufReader;
 
 use ws;
@@ -58,7 +55,8 @@ use header::sec_websocket_extensions::Extension;
 ///# }
 ///```
 pub struct Client<S>
-	where S: Stream
+where
+	S: Stream,
 {
 	stream: BufReader<S>,
 	headers: HeaderMap,
@@ -81,7 +79,8 @@ impl Client<TcpStream> {
 }
 
 impl<S> Client<S>
-	where S: AsTcpStream + Stream
+where
+	S: AsTcpStream + Stream,
 {
 	/// Shuts down the client connection, will cause all pending and future IO to
 	/// return immediately with an appropriate value.
@@ -114,7 +113,8 @@ impl<S> Client<S>
 }
 
 impl<S> Client<S>
-    where S: Stream
+where
+	S: Stream,
 {
 	/// Creates a Client from a given stream
 	/// **without sending any handshake** this is meant to only be used with
@@ -137,14 +137,16 @@ impl<S> Client<S>
 
 	/// Sends a single data frame to the remote endpoint.
 	pub fn send_dataframe<D>(&mut self, dataframe: &D) -> WebSocketResult<()>
-		where D: DataFrameable
+	where
+		D: DataFrameable,
 	{
 		self.sender.send_dataframe(self.stream.get_mut(), dataframe)
 	}
 
 	/// Sends a single message to the remote endpoint.
 	pub fn send_message<M>(&mut self, message: &M) -> WebSocketResult<()>
-		where M: ws::Message
+	where
+		M: ws::Message,
 	{
 		self.sender.send_message(self.stream.get_mut(), message)
 	}
@@ -199,17 +201,18 @@ impl<S> Client<S>
 	/// ```
 	pub fn protocols<'a>(&'a self) -> Vec<&str> {
 		self.headers
-			.get(SEC_WEBSOCKET_PROTOCOL)
-			.map(|e| {
-				str::from_utf8(e.as_bytes()).unwrap()
-					.split(',')
-					.filter_map(|x| match x.trim() {
-						"" => None,
-						y => Some(y),
-					})
-					.collect::<Vec<&str>>()
-			})
-			.unwrap_or(vec![])
+		    .get(SEC_WEBSOCKET_PROTOCOL)
+		    .map(|e| {
+			str::from_utf8(e.as_bytes())
+				.unwrap()
+				.split(',')
+				.filter_map(|x| match x.trim() {
+					"" => None,
+					y => Some(y),
+				})
+				.collect::<Vec<&str>>()
+		})
+		    .unwrap_or(vec![])
 	}
 
 	/// If you supplied a protocol, be sure to check if it was accepted by the
@@ -217,20 +220,22 @@ impl<S> Client<S>
 	/// one will require its own implementation.
 	pub fn extensions(&self) -> Vec<Extension> {
 		self.headers
-			.get(SEC_WEBSOCKET_EXTENSIONS)
-			.map(|e| {
-				str::from_utf8(e.as_bytes()).unwrap()
-					.split(',')
-					.filter_map(|x| match x.trim() {
-						"" => None,
-						y => Some(y),
-					})
-					.filter_map(|x| match Extension::from_str(x) {
-						Ok(ext) => Some(ext),
-						_ => None,
-					})
-					.collect::<Vec<Extension>>()
-			}).unwrap_or(vec![])
+		    .get(SEC_WEBSOCKET_EXTENSIONS)
+		    .map(|e| {
+			str::from_utf8(e.as_bytes())
+				.unwrap()
+				.split(',')
+				.filter_map(|x| match x.trim() {
+					"" => None,
+					y => Some(y),
+				})
+				.filter_map(|x| match Extension::from_str(x) {
+					Ok(ext) => Some(ext),
+					_ => None,
+				})
+				.collect::<Vec<Extension>>()
+		})
+		    .unwrap_or(vec![])
 	}
 
 	/// Get a reference to the stream.
@@ -357,7 +362,8 @@ impl<S> Client<S>
 }
 
 impl<S> Client<S>
-    where S: Splittable + Stream
+where
+	S: Splittable + Stream,
 {
 	/// Split this client into its constituent Sender and Receiver pair.
 	///
@@ -384,22 +390,20 @@ impl<S> Client<S>
 	///sender.send_message(&message).unwrap();
 	///# }
 	///```
-	pub fn split
-		(self)
-		 -> IoResult<(Reader<<S as Splittable>::Reader>, Writer<<S as Splittable>::Writer>)> {
+	pub fn split(
+		self,
+	) -> IoResult<(Reader<<S as Splittable>::Reader>, Writer<<S as Splittable>::Writer>)> {
 		let stream = self.stream.into_inner();
 		let (read, write) = stream.split()?;
-		Ok(
-			(
-				Reader {
-					stream: BufReader::new(read),
-					receiver: self.receiver,
-				},
-				Writer {
-					stream: write,
-					sender: self.sender,
-				}
-			)
-		)
+		Ok((
+			Reader {
+				stream: BufReader::new(read),
+				receiver: self.receiver,
+			},
+			Writer {
+				stream: write,
+				sender: self.sender,
+			},
+		))
 	}
 }

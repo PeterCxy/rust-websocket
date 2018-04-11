@@ -19,7 +19,7 @@ use codec::ws::{MessageCodec, Context};
 use bytes::BytesMut;
 use client::async::ClientNew;
 
-use ::codec::http::MessageHead;
+use codec::http::MessageHead;
 
 /// An asynchronous websocket upgrade.
 ///
@@ -31,19 +31,20 @@ use ::codec::http::MessageHead;
 /// # Example
 ///
 /// ```rust,no_run
-/// use websocket::async::{Core, TcpListener, TcpStream};
+/// # extern crate tokio;
+/// # extern crate websocket;
+/// use websocket::async::{TcpListener, TcpStream};
 /// use websocket::async::futures::{Stream, Future};
 /// use websocket::async::server::upgrade::IntoWs;
 /// use websocket::sync::Client;
 ///
-/// let mut core = Core::new().unwrap();
-/// let handle = core.handle();
+/// # fn main() {
 /// let addr = "127.0.0.1:80".parse().unwrap();
-/// let listener = TcpListener::bind(&addr, &handle).unwrap();
+/// let listener = TcpListener::bind(&addr).unwrap();
 ///
 /// let websocket_clients = listener
 ///     .incoming().map_err(|e| e.into())
-///     .and_then(|(stream, _)| stream.into_ws().map_err(|e| e.3))
+///     .and_then(|stream| stream.into_ws().map_err(|e| e.3))
 ///     .map(|upgrade| {
 ///         if upgrade.protocols().iter().any(|p| *p == "super-cool-proto") {
 ///             let accepted = upgrade
@@ -51,14 +52,15 @@ use ::codec::http::MessageHead;
 ///                 .accept()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
-///             handle.spawn(accepted);
+///             tokio::spawn(accepted);
 ///         } else {
 ///             let rejected = upgrade.reject()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
-///             handle.spawn(rejected);
+///             tokio::spawn(rejected);
 ///         }
 ///     });
+/// # }
 /// ```
 pub type Upgrade<S> = WsUpgrade<S, BytesMut>;
 
@@ -66,7 +68,8 @@ pub type Upgrade<S> = WsUpgrade<S, BytesMut>;
 /// turned on. A type alias for this specialization of `WsUpgrade` lives in this
 /// module under the name `Upgrade`.
 impl<S> WsUpgrade<S, BytesMut>
-    where S: Stream + ::std::marker::Send + 'static
+where
+	S: Stream + ::std::marker::Send + 'static,
 {
 	/// Asynchronously accept the websocket handshake, then create a client.
 	/// This will asynchronously send a response accepting the connection
@@ -92,20 +95,20 @@ impl<S> WsUpgrade<S, BytesMut>
 				readbuf: buffer,
 				writebuf: BytesMut::with_capacity(0),
 			},
-			HttpServerCodec);
+			HttpServerCodec,
+		);
 
-		let future = duplex
-			.send(MessageHead {
-					version: request.version,
-					subject: status,
-					headers: headers.clone(),
-			})
-			.map(move |s| {
-				let codec = MessageCodec::default(Context::Server);
-				let client = Framed::from_parts(s.into_parts(), codec);
-				(client, headers)
-			})
-			.map_err(|e| e.into());
+		let future = duplex.send(MessageHead {
+			version: request.version,
+			subject: status,
+			headers: headers.clone(),
+		})
+		                   .map(move |s| {
+			let codec = MessageCodec::default(Context::Server);
+			let client = Framed::from_parts(s.into_parts(), codec);
+			(client, headers)
+		})
+		                   .map_err(|e| e.into());
 		Box::new(future)
 	}
 
@@ -134,7 +137,8 @@ impl<S> WsUpgrade<S, BytesMut>
 				readbuf: self.buffer,
 				writebuf: BytesMut::with_capacity(0),
 			},
-			HttpServerCodec);
+			HttpServerCodec,
+		);
 		duplex.send(MessageHead {
 			version: self.request.version,
 			subject: StatusCode::BAD_REQUEST,
@@ -161,19 +165,20 @@ impl<S> WsUpgrade<S, BytesMut>
 /// # Example
 ///
 /// ```rust,no_run
-/// use websocket::async::{Core, TcpListener, TcpStream};
+/// # extern crate tokio;
+/// # extern crate websocket;
+/// use websocket::async::{TcpListener, TcpStream};
 /// use websocket::async::futures::{Stream, Future};
 /// use websocket::async::server::upgrade::IntoWs;
 /// use websocket::sync::Client;
 ///
-/// let mut core = Core::new().unwrap();
-/// let handle = core.handle();
+/// # fn main() {
 /// let addr = "127.0.0.1:80".parse().unwrap();
-/// let listener = TcpListener::bind(&addr, &handle).unwrap();
+/// let listener = TcpListener::bind(&addr).unwrap();
 ///
 /// let websocket_clients = listener
 ///     .incoming().map_err(|e| e.into())
-///     .and_then(|(stream, _)| stream.into_ws().map_err(|e| e.3))
+///     .and_then(|stream| stream.into_ws().map_err(|e| e.3))
 ///     .map(|upgrade| {
 ///         if upgrade.protocols().iter().any(|p| *p == "super-cool-proto") {
 ///             let accepted = upgrade
@@ -181,14 +186,15 @@ impl<S> WsUpgrade<S, BytesMut>
 ///                 .accept()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
-///             handle.spawn(accepted);
+///             tokio::spawn(accepted);
 ///         } else {
 ///             let rejected = upgrade.reject()
 ///                 .map(|_| ()).map_err(|_| ());
 ///
-///             handle.spawn(rejected);
+///             tokio::spawn(rejected);
 ///         }
 ///     });
+/// }
 /// ```
 pub trait IntoWs {
 	/// The type of stream this upgrade process is working with (TcpStream, etc.)
@@ -202,43 +208,50 @@ pub trait IntoWs {
 	///
 	/// Note: this is the asynchronous version, meaning it will not block when
 	/// trying to read a request.
-	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send>;
+	fn into_ws(
+		self,
+	) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send>;
 }
 
 impl<S> IntoWs for S
-    where S: Stream + ::std::marker::Send + 'static
+where
+	S: Stream + ::std::marker::Send + 'static,
 {
 	type Stream = S;
 	type Error = (S, Option<RequestHead>, BytesMut, HyperIntoWsError);
 
-	fn into_ws(self) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send> {
+	fn into_ws(
+		self,
+	) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send> {
 		let future = self.framed(HttpServerCodec)
-			.into_future()
-			.map_err(|(e, s)| {
-				let FramedParts { inner, readbuf, .. } = s.into_parts();
-				(inner, None, readbuf, e.into())
-			})
-			.and_then(|(m, s)| {
-				let FramedParts { inner, readbuf, .. } = s.into_parts();
-				if let Some(msg) = m {
-					match validate(&msg.subject.0, &msg.version, &msg.headers) {
-						Ok(()) => Ok((msg, inner, readbuf)),
-						Err(e) => Err((inner, None, readbuf, e)),
-					}
-				} else {
-					let err = HyperIntoWsError::Io(io::Error::new(ErrorKind::ConnectionReset,
-					"Connection dropped before handshake could be read"));
-					Err((inner, None, readbuf, err))
+		                 .into_future()
+		                 .map_err(|(e, s)| {
+			let FramedParts { inner, readbuf, .. } = s.into_parts();
+			(inner, None, readbuf, e.into())
+		})
+		                 .and_then(|(m, s)| {
+			let FramedParts { inner, readbuf, .. } = s.into_parts();
+			if let Some(msg) = m {
+				match validate(&msg.subject.0, &msg.version, &msg.headers) {
+					Ok(()) => Ok((msg, inner, readbuf)),
+					Err(e) => Err((inner, None, readbuf, e)),
 				}
-			})
-			.map(|(m, stream, buffer)| {
-				WsUpgrade {
-					headers: HeaderMap::new(),
-					stream: stream,
-					request: m,
-					buffer: buffer,
-				}
-			});
+			} else {
+				let err = HyperIntoWsError::Io(io::Error::new(
+					ErrorKind::ConnectionReset,
+					"Connection dropped before handshake could be read",
+				));
+				Err((inner, None, readbuf, err))
+			}
+		})
+		                 .map(|(m, stream, buffer)| {
+			WsUpgrade {
+				headers: HeaderMap::new(),
+				stream: stream,
+				request: m,
+				buffer: buffer,
+			}
+		});
 		Box::new(future)
 	}
 }

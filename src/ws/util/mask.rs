@@ -76,16 +76,16 @@ mod tests {
 		let buffer = b"The quick brown fox jumps over the lazy dog";
 		let key = gen_mask();
 		b.iter(|| {
-			       let mut output = mask_data(key, buffer);
-			       test::black_box(&mut output);
-			      });
+			let mut output = mask_data(key, buffer);
+			test::black_box(&mut output);
+		});
 	}
 
 	#[bench]
 	fn bench_gen_mask(b: &mut test::Bencher) {
 		b.iter(|| {
-			       let mut key = gen_mask();
-			       test::black_box(&mut key);
-			      });
+			let mut key = gen_mask();
+			test::black_box(&mut key);
+		});
 	}
 }

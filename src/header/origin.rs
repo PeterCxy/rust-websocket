@@ -19,7 +19,9 @@ enum OriginOrNull {
 
 impl Origin {
 	pub fn new<S: Into<Cow<'static, str>>, H: Into<Cow<'static, str>>>(
-		scheme: S, hostname: H, port: Option<u16>
+		scheme: S,
+		hostname: H,
+		port: Option<u16>,
 	) -> Origin {
 		Origin(OriginOrNull::Origin {
 			scheme: scheme.into(),
@@ -53,8 +55,8 @@ impl Origin {
 	}
 }
 
-static HTTP : &'static str = "http";
-static HTTPS : &'static str = "https";
+static HTTP: &'static str = "http";
+static HTTPS: &'static str = "https";
 
 impl FromStr for Origin {
 	type Err = ();
@@ -68,7 +70,7 @@ impl FromStr for Origin {
 		let (scheme, etc) = (&s[..idx], &s[idx + 3..]);
 		let host = try!(Host::from_str(etc));
 		let scheme = match scheme {
-			"http"	=> Cow::Borrowed(HTTP),
+			"http" => Cow::Borrowed(HTTP),
 			"https" => Cow::Borrowed(HTTPS),
 			s => Cow::Owned(s.to_owned()),
 		};
@@ -83,7 +85,10 @@ impl FromStr for Origin {
 impl fmt::Display for Origin {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self.0 {
-			OriginOrNull::Origin { ref scheme,  ref host } => write!(f, "{}://{}", scheme, host),
+			OriginOrNull::Origin {
+				ref scheme,
+				ref host,
+			} => write!(f, "{}://{}", scheme, host),
 			OriginOrNull::Null => f.write_str("null"),
 		}
 	}
