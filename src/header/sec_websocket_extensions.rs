@@ -151,7 +151,7 @@ impl fmt::Display for WebSocketExtensions {
 #[cfg(all(feature = "nightly", test))]
 mod tests {
 	use super::*;
-	use hyper::header::Header;
+	use http::header::Header;
 	use test;
 	#[test]
 	fn test_header_extensions() {
