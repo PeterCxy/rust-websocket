@@ -97,13 +97,13 @@ impl fmt::Display for Origin {
 #[cfg(all(feature = "nightly", test))]
 mod tests {
 	use super::*;
-	use hyper::header::Header;
+	use http::header::Header;
 	use test;
 	#[test]
 	fn test_header_origin() {
 		use header::Headers;
 
-		let origin = Origin("foo bar".to_string());
+		let origin = Origin::from_str("foo bar");
 		let mut headers = Headers::new();
 		headers.set(origin);
 

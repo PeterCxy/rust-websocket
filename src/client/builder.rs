@@ -532,17 +532,16 @@ impl<'u> ClientBuilder<'u> {
 	///
 	/// ```rust,no_run
 	/// # extern crate rand;
-	/// # extern crate tokio_core;
+	/// # extern crate tokio;
 	/// # extern crate futures;
 	/// # extern crate websocket;
 	/// use websocket::ClientBuilder;
 	/// use websocket::futures::{Future, Stream, Sink};
 	/// use websocket::Message;
-	/// use tokio_core::reactor::Core;
+	/// use tokio::reactor::Handle;
 	/// # use rand::Rng;
 	///
 	/// # fn main() {
-	/// let mut core = Core::new().unwrap();
 	///
 	/// // let's randomly do either SSL or plaintext
 	/// let url = if rand::thread_rng().gen() {
@@ -553,14 +552,14 @@ impl<'u> ClientBuilder<'u> {
 	///
 	/// // send a message and hear it come back
 	/// let echo_future = ClientBuilder::new(url).unwrap()
-	///     .async_connect(None, &core.handle())
+	///     .async_connect(None, &Handle::default())
 	///     .and_then(|(s, _)| s.send(Message::text("hallo").into()))
 	///     .and_then(|s| s.into_future().map_err(|e| e.0))
 	///     .map(|(m, _)| {
 	///         assert_eq!(m, Some(Message::text("hallo").into()))
 	///     });
 	///
-	/// core.run(echo_future).unwrap();
+	/// tokio::run(echo_future.map_err(|e| panic!("{}", e)));
 	/// # }
 	/// ```
 	#[cfg(feature = "async-ssl")]
@@ -624,27 +623,25 @@ impl<'u> ClientBuilder<'u> {
 	///# Example
 	///
 	/// ```rust
-	/// # extern crate tokio_core;
+	/// # extern crate tokio;
 	/// # extern crate futures;
 	/// # extern crate websocket;
+	/// use tokio::reactor::Handle;
 	/// use websocket::ClientBuilder;
 	/// use websocket::futures::{Future, Stream, Sink};
 	/// use websocket::Message;
-	/// use tokio_core::reactor::Core;
 	/// # fn main() {
-	///
-	/// let mut core = Core::new().unwrap();
 	///
 	/// // send a message and hear it come back
 	/// let echo_future = ClientBuilder::new("wss://echo.websocket.org").unwrap()
-	///     .async_connect_secure(None, &core.handle())
+	///     .async_connect_secure(None, &Handle::default())
 	///     .and_then(|(s, _)| s.send(Message::text("hallo").into()))
 	///     .and_then(|s| s.into_future().map_err(|e| e.0))
 	///     .map(|(m, _)| {
 	///         assert_eq!(m, Some(Message::text("hallo").into()))
 	///     });
 	///
-	/// core.run(echo_future).unwrap();
+	/// tokio::run(echo_future.map_err(|e| panic!("{}", e)));
 	/// # }
 	/// ```
 	#[cfg(feature = "async-ssl")]
@@ -694,27 +691,25 @@ impl<'u> ClientBuilder<'u> {
 	///# Example
 	///
 	/// ```rust,no_run
-	/// # extern crate tokio_core;
+	/// # extern crate tokio;
 	/// # extern crate futures;
 	/// # extern crate websocket;
+	/// use tokio::reactor::Handle;
 	/// use websocket::ClientBuilder;
 	/// use websocket::futures::{Future, Stream, Sink};
 	/// use websocket::Message;
-	/// use tokio_core::reactor::Core;
 	/// # fn main() {
-	///
-	/// let mut core = Core::new().unwrap();
 	///
 	/// // send a message and hear it come back
 	/// let echo_future = ClientBuilder::new("ws://echo.websocket.org").unwrap()
-	///     .async_connect_insecure(&core.handle())
+	///     .async_connect_insecure(&Handle::default())
 	///     .and_then(|(s, _)| s.send(Message::text("hallo").into()))
 	///     .and_then(|s| s.into_future().map_err(|e| e.0))
 	///     .map(|(m, _)| {
 	///         assert_eq!(m, Some(Message::text("hallo").into()))
 	///     });
 	///
-	/// core.run(echo_future).unwrap();
+	/// tokio::run(echo_future.map_err(|e| panic!("{}", e)));
 	/// # }
 	/// ```
 	#[cfg(feature = "async")]

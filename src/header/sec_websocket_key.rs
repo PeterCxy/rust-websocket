@@ -46,6 +46,7 @@ impl FromStr for WebSocketKey {
 }
 
 impl WebSocketKey {
+	pub const HEADER_NAME: &'static str = "Sec-WebSocket-Key";
 	/// Generate a new, random WebSocketKey
 	pub fn new() -> WebSocketKey {
 		let key: [u8; 16] = unsafe {
@@ -69,20 +70,6 @@ impl TryFrom<HeaderValue> for WebSocketKey {
 	}
 }
 
-// impl Header for WebSocketKey {
-// 	fn header_name() -> &'static str {
-// 		"Sec-WebSocket-Key"
-// 	}
-
-// 	fn parse_header(raw: &hyper::header::Raw) -> hyper::Result<WebSocketKey> {
-// 		from_one_raw_str(raw)
-// 	}
-
-// 	fn fmt_header(&self, fmt: &mut hyper::header::Formatter) -> fmt::Result {
-// 		fmt.fmt_line(self)
-// 	}
-// }
-
 impl fmt::Display for WebSocketKey {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let WebSocketKey(accept) = *self;
@@ -93,15 +80,15 @@ impl fmt::Display for WebSocketKey {
 #[cfg(all(feature = "nightly", test))]
 mod tests {
 	use super::*;
-	use hyper::header::Header;
+	use http::header::HeaderMap;
 	use test;
 	#[test]
 	fn test_header_key() {
 		use header::Headers;
 
 		let extensions = WebSocketKey([65; 16]);
-		let mut headers = Headers::new();
-		headers.set(extensions);
+		let mut headers = HeaderMap::new();
+		headers.insert(WebSocketKey::HEADER_NAME, HeaderValue::from(extensions));
 
 		assert_eq!(
 			&headers.to_string()[..],
@@ -126,7 +113,7 @@ mod tests {
 	#[bench]
 	fn bench_header_key_format(b: &mut test::Bencher) {
 		let value = vec![b"QUFBQUFBQUFBQUFBQUFBQQ==".to_vec()];
-		let val: WebSocketKey = Header::parse_header(&value[..]).unwrap();
+		let val = Header::parse_header(&value[..]).unwrap();
 		b.iter(|| {
 			format!("{}", val.serialize());
 		});
