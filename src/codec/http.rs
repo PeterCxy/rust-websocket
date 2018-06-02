@@ -148,19 +148,26 @@ impl Encoder for HttpClientCodec {
 	type Error = io::Error;
 
 	fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+
 		// TODO: optomize this!
-		let request = format!(
-			"{} {} {:?}\r\n{:?}\r\n",
-			item.subject.0,
-			item.subject.1,
-			item.version,
-			item.headers
-		);
+		let mut request = format!(
+			"{} {} {:?}\r\n",
+			item.subject.0, item.subject.1, item.version
+		).to_owned();
+
+		for (key, value) in item.headers.iter() {
+			request += &format!("{}: {}\r\n", key.as_str(), value.to_str().unwrap());
+		}
+
+		request += "\r\n";
+
 		let byte_len = request.as_bytes().len();
 		if byte_len > dst.remaining_mut() {
 			dst.reserve(byte_len);
 		}
+
 		dst.writer().write(request.as_bytes()).map(|_| ())
+
 	}
 }
 
