@@ -809,6 +809,7 @@ impl<'u> ClientBuilder<'u> {
 
           // validate
 		      .and_then(move |(message, stream)| {
+			  println!("MESSAGE: {:?}", &message);
               message
                   .ok_or(WebSocketError::ProtocolError(
                       "Connection closed before handshake could complete."))
@@ -938,23 +939,16 @@ impl<'u> ClientBuilder<'u> {
 			));
 		}
 
-		if response.headers.get(UPGRADE) !=
-			Some(
-				&(Upgrade(vec![
-					Protocol {
-						name: ProtocolName::WebSocket,
-						version: None,
-					},
-				])
-				  .into()),
-			)
+		if response.headers.get(UPGRADE).and_then(|v| {
+			v.to_str().ok().map(|v| {
+				v.to_owned().to_lowercase()
+			})
+		}) != Some(String::from("websocket"))
 		{
 			return Err(WebSocketError::ResponseError(
 				"Upgrade field must be WebSocket",
 			));
 		}
-
-
 
 		if self.headers.get(CONNECTION) !=
 			Some(
