@@ -8,8 +8,10 @@ use bytes::{BufMut, BytesMut};
 pub use url::{Url, ParseError};
 use http;
 use http::header::{AsHeaderName, HeaderMap, HeaderName, HeaderValue};
-use http::header::{CONNECTION, HOST, ORIGIN, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS,
-                   SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE};
+use http::header::{
+	CONNECTION, HOST, ORIGIN, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS,
+	SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE
+};
 use httparse;
 
 use codec::http::{MAX_HEADERS, HeaderIndices, HeadersAsBytesIter, ResponseHead};
@@ -461,7 +463,7 @@ impl<'u> ClientBuilder<'u> {
 			}
 		}
 
-		println!("Response: {}", buf);
+		//println!("Response: {}", buf);
 
 		let mut buf_bytes = BytesMut::from(buf);
 
@@ -472,16 +474,16 @@ impl<'u> ClientBuilder<'u> {
 
 		let (len, status, version, headers_len) = {
 			let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-			println!(
-				"Response.parse([Header; {}], [u8; {}])",
-				headers.len(),
-				buf_bytes.len()
-			);
+			// println!(
+			// 	"Response.parse([Header; {}], [u8; {}])",
+			// 	headers.len(),
+			// 	buf_bytes.len()
+			// );
 			let mut res = httparse::Response::new(&mut headers);
 			let bytes = buf_bytes.as_ref();
 			match try!(res.parse(bytes)) {
 				httparse::Status::Complete(len) => {
-					println!("Response.parse Complete({})", len);
+					//println!("Response.parse Complete({})", len);
 					let status = try!(StatusCode::from_u16(res.code.unwrap()).map_err(|_| {
 						httparse::Error::Status
 					}));
@@ -801,27 +803,26 @@ impl<'u> ClientBuilder<'u> {
 		};
 
 		let future = framed
-		      // send request
-          .send(request).map_err(::std::convert::Into::into)
+			// send request
+			.send(request).map_err(::std::convert::Into::into)
 
-          // wait for a response
-		      .and_then(|stream| stream.into_future().map_err(|e| e.0.into()))
+			// wait for a response
+			.and_then(|stream| stream.into_future().map_err(|e| e.0.into()))
 
-          // validate
-		      .and_then(move |(message, stream)| {
-			  println!("MESSAGE: {:?}", &message);
-              message
-                  .ok_or(WebSocketError::ProtocolError(
-                      "Connection closed before handshake could complete."))
-                  .and_then(|message| builder.validate(&message).map(|()| (message, stream)))
-          })
+			// validate
+			.and_then(move |(message, stream)| {
+				//println!("MESSAGE: {:?}", &message);
+				message
+					.ok_or(WebSocketError::ProtocolError("Connection closed before handshake could complete."))
+					.and_then(|message| builder.validate(&message).map(|()| (message, stream)))
+			})
 
-          // output the final client and metadata
-          .map(|(message, stream)| {
-              let codec = MessageCodec::default(Context::Client);
-              let client = Framed::from_parts(stream.into_parts(), codec);
-              (client, message.headers)
-          });
+			// output the final client and metadata
+			.map(|(message, stream)| {
+				let codec = MessageCodec::default(Context::Client);
+				let client = Framed::from_parts(stream.into_parts(), codec);
+				(client, message.headers)
+			});
 
 		Box::new(future)
 	}
@@ -925,13 +926,11 @@ impl<'u> ClientBuilder<'u> {
 
 		let key: WebSocketKey =
 			self.headers
-			    .get(SEC_WEBSOCKET_KEY)
-			    .map(|key| WebSocketKey::from_str(key.to_str().unwrap()).unwrap())
-			    .ok_or(WebSocketError::RequestError(
-				"Request Sec-WebSocket-Key was invalid",
-			))?;
+				.get(SEC_WEBSOCKET_KEY)
+				.map(|key| WebSocketKey::from_str(key.to_str().unwrap()).unwrap())
+				.ok_or(WebSocketError::RequestError("Request Sec-WebSocket-Key was invalid",))?;
 
-		println!("{:?} : {}", response.headers, WebSocketAccept::new(key));
+		//println!("{:?} : {}", response.headers, WebSocketAccept::new(key));
 
 		if response.headers.get(SEC_WEBSOCKET_ACCEPT) != Some(&(WebSocketAccept::new(key)).into()) {
 			return Err(WebSocketError::ResponseError(
@@ -957,7 +956,7 @@ impl<'u> ClientBuilder<'u> {
 						Ascii::new("Upgrade".to_string())
 					),
 				])
-				  .into()),
+					.into()),
 			)
 		{
 			return Err(WebSocketError::ResponseError(

@@ -381,7 +381,7 @@ mod tests {
 			.and_then(|s| {
 				let mut stream = s.into_parts().inner;
 				stream.1.set_position(0);
-				println!("buffer: {:?}", stream.1);
+				//println!("buffer: {:?}", stream.1);
 				ReadWritePair(stream.1, stream.0)
 					.framed(MessageCodec::default(Context::Server))
 					.into_future()
