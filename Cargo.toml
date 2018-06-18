@@ -32,9 +32,7 @@ tokio-io = { version = "0.1.6", optional = true }
 futures = { version = "0.1.19", optional = true }
 bytes = { version = "0.4", optional = true }
 native-tls = { version = "^0.1.2", optional = true }
-
-[dependencies.hyper]
-git = "https://github.com/hyperium/hyper"
+hyper = "0.12.0"
 
 [dependencies.tokio-tls]
 git = "https://github.com/enzious/tokio-tls"
@@ -49,4 +47,4 @@ sync = []
 sync-ssl = ["native-tls", "sync"]
 async = ["tokio", "tokio-io", "bytes", "futures"]
 async-ssl = ["native-tls", "tokio-tls", "async"]
-nightly = ["hyper/nightly"]
+nightly = []
