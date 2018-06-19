@@ -26,11 +26,7 @@ impl<'w> Masker<'w> {
 
 impl<'w> Write for Masker<'w> {
 	fn write(&mut self, data: &[u8]) -> IoResult<usize> {
-		let mut buf = Vec::with_capacity(data.len());
-		for &byte in data.iter() {
-			buf.push(byte ^ self.key[self.pos]);
-			self.pos = (self.pos + 1) % self.key.len();
-		}
+    let buf = mask_data(self.key, &data);
 		self.end.write(&buf)
 	}
 
@@ -48,9 +44,12 @@ pub fn gen_mask() -> [u8; 4] {
 /// Masks data to send to a server and writes
 pub fn mask_data(mask: [u8; 4], data: &[u8]) -> Vec<u8> {
 	let mut out = Vec::with_capacity(data.len());
+  unsafe { out.set_len(data.len()) };
 	let zip_iter = data.iter().zip(mask.iter().cycle());
+  let mut i = 0;
 	for (&buf_item, &key_item) in zip_iter {
-		out.push(buf_item ^ key_item);
+		out[i] = buf_item ^ key_item;
+    i += 1;
 	}
 	out
 }
