@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(all(test, feature = "nightly"), feature(test))]
+#![cfg_attr(feature = "nightly", feature(stdsimd))]
 #![feature(try_from)]
 
 #![deny(unused_mut)]
