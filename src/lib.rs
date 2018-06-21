@@ -46,6 +46,8 @@ extern crate tokio;
 #[cfg(feature = "async")]
 extern crate tokio_io;
 #[cfg(feature = "async")]
+extern crate tokio_codec;
+#[cfg(feature = "async")]
 extern crate bytes;
 #[cfg(feature = "async")]
 pub extern crate futures;

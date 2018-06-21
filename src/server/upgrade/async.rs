@@ -7,7 +7,7 @@
 //! (e.g. what protocols it wants to use) and decide whether to accept or reject it.
 use super::{HyperIntoWsError, WsUpgrade, validate};
 use std::io::{self, ErrorKind};
-use tokio_io::codec::{Framed, FramedParts};
+use tokio_codec::{Framed, FramedParts, Decoder};
 use http::header::HeaderMap;
 use http::StatusCode;
 use stream::async::Stream;
@@ -88,15 +88,10 @@ where
 	fn internal_accept(mut self, custom_headers: Option<HeaderMap>) -> ClientNew<S> {
 		let status = self.prepare_headers(custom_headers);
 		let WsUpgrade { headers, stream, request, buffer } = self;
+		let mut parts = FramedParts::new(stream, HttpServerCodec);
+		parts.read_buf = buffer;
 
-		let duplex = Framed::from_parts(
-			FramedParts {
-				inner: stream,
-				readbuf: buffer,
-				writebuf: BytesMut::with_capacity(0),
-			},
-			HttpServerCodec,
-		);
+		let duplex = Framed::from_parts(parts);
 
 		let future = duplex.send(MessageHead {
 			version: request.version,
@@ -105,7 +100,11 @@ where
 		})
 		                   .map(move |s| {
 			let codec = MessageCodec::default(Context::Server);
-			let client = Framed::from_parts(s.into_parts(), codec);
+			let FramedParts { io, write_buf, read_buf, .. } = s.into_parts();
+			let mut new_parts = FramedParts::new(io, codec);
+			new_parts.write_buf = write_buf;
+			new_parts.read_buf = read_buf;
+			let client = Framed::from_parts(new_parts);
 			(client, headers)
 		})
 		                   .map_err(|e| e.into());
@@ -131,14 +130,9 @@ where
 		if let Some(custom) = headers {
 			self.headers.extend(custom.into_iter());
 		}
-		let duplex = Framed::from_parts(
-			FramedParts {
-				inner: self.stream,
-				readbuf: self.buffer,
-				writebuf: BytesMut::with_capacity(0),
-			},
-			HttpServerCodec,
-		);
+		let mut parts = FramedParts::new(self.stream, HttpServerCodec);
+		parts.read_buf = self.buffer;
+		let duplex = Framed::from_parts(parts);
 		duplex.send(MessageHead {
 			version: self.request.version,
 			subject: StatusCode::BAD_REQUEST,
@@ -223,25 +217,25 @@ where
 	fn into_ws(
 		self,
 	) -> Box<Future<Item = Upgrade<Self::Stream>, Error = Self::Error> + ::std::marker::Send> {
-		let future = self.framed(HttpServerCodec)
+		let future = HttpServerCodec.framed(self)
 		                 .into_future()
 		                 .map_err(|(e, s)| {
-			let FramedParts { inner, readbuf, .. } = s.into_parts();
-			(inner, None, readbuf, e.into())
+			let FramedParts { io, read_buf, .. } = s.into_parts();
+			(io, None, read_buf, e.into())
 		})
 		                 .and_then(|(m, s)| {
-			let FramedParts { inner, readbuf, .. } = s.into_parts();
+			let FramedParts { io, read_buf, .. } = s.into_parts();
 			if let Some(msg) = m {
 				match validate(&msg.subject.0, &msg.version, &msg.headers) {
-					Ok(()) => Ok((msg, inner, readbuf)),
-					Err(e) => Err((inner, None, readbuf, e)),
+					Ok(()) => Ok((msg, io, read_buf)),
+					Err(e) => Err((io, None, read_buf, e)),
 				}
 			} else {
 				let err = HyperIntoWsError::Io(io::Error::new(
 					ErrorKind::ConnectionReset,
 					"Connection dropped before handshake could be read",
 				));
-				Err((inner, None, readbuf, err))
+				Err((io, None, read_buf, err))
 			}
 		})
 		                 .map(|(m, stream, buffer)| {

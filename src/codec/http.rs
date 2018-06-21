@@ -12,7 +12,7 @@ use http::{self, Method, StatusCode, Uri};
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 use httparse::{self, Request};
 use hyper;
-use tokio_io::codec::{Decoder, Encoder};
+use tokio_codec::{Decoder, Encoder};
 
 #[cfg(any(feature = "sync", feature = "async"))]
 use http::Version;

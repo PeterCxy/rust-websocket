@@ -43,7 +43,7 @@
 //! ```
 
 pub use tokio::reactor::Handle;
-pub use tokio_io::codec::Framed;
+pub use tokio_codec::Framed;
 pub use tokio::net::TcpStream;
 pub use futures::Future;
 use http::header::HeaderMap;

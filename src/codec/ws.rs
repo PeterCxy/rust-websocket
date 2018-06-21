@@ -12,8 +12,8 @@ use std::marker::PhantomData;
 use std::io::Cursor;
 use std::mem;
 
-use tokio_io::codec::Decoder;
-use tokio_io::codec::Encoder;
+use tokio_codec::Decoder;
+use tokio_codec::Encoder;
 use bytes::BytesMut;
 use bytes::BufMut;
 

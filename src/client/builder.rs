@@ -52,7 +52,7 @@ use native_tls::TlsStream;
 #[cfg(feature = "async")]
 mod async_imports {
 	pub use super::super::async;
-	pub use tokio_io::codec::Framed;
+	pub use tokio_codec::{Decoder, Framed, FramedParts};
 	pub use tokio::net::TcpStream as AsyncTcpStream;
 	pub use tokio::net::ConnectFuture;
 	pub use tokio::reactor::Handle;
@@ -795,7 +795,7 @@ impl<'u> ClientBuilder<'u> {
 			key_set: self.key_set,
 		};
 		let resource = builder.build_request();
-		let framed = stream.framed(::codec::http::HttpClientCodec);
+		let framed = ::codec::http::HttpClientCodec.framed(stream);
 		let request = MessageHead {
 			version: builder.version,
 			headers: builder.headers.clone(),
@@ -820,7 +820,12 @@ impl<'u> ClientBuilder<'u> {
 			// output the final client and metadata
 			.map(|(message, stream)| {
 				let codec = MessageCodec::default(Context::Client);
-				let client = Framed::from_parts(stream.into_parts(), codec);
+				let parts = stream.into_parts();
+				let FramedParts { io, write_buf, read_buf, .. } = parts;
+				let mut new_parts = FramedParts::new(io, codec);
+				new_parts.write_buf = write_buf;
+				new_parts.read_buf = read_buf;
+				let client = Framed::from_parts(new_parts);
 				(client, message.headers)
 			});
 
